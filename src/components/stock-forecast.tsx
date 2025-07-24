@@ -151,8 +151,8 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
   }
 
   const formatDate = (dateString: string) => {
-    // YYYY-MM-DD is treated as UTC by new Date().
-    const date = new Date(dateString + 'T00:00:00Z');
+    // The date string is in "YYYY-MM-DD" format. We treat it as UTC to avoid timezone issues.
+    const date = new Date(`${dateString}T00:00:00Z`);
     return date.toLocaleDateString('en-US', {
       timeZone: 'UTC', // Display in UTC to match the input
       weekday: 'short',
