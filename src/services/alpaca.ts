@@ -1,9 +1,6 @@
 
 "use server";
 
-import { config } from 'dotenv';
-config();
-
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET;
 const ALPACA_DATA_URL = "https://data.alpaca.markets/v2";
@@ -88,6 +85,7 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
         timeframe: '1Day',
         adjustment: 'split',
         limit: '1000', // Max limit to ensure we get all days
+        feed: 'iex',
     });
 
     const url = `${ALPACA_DATA_URL}/stocks/${ticker}/bars?${params.toString()}`;
