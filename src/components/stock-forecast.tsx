@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -59,10 +60,13 @@ function SubmitButton() {
   );
 }
 
+const popularTickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"];
+
 export function StockForecast() {
   const [state, formAction] = useActionState(getForecastAction, initialState);
   const { pending } = useFormStatus();
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -83,6 +87,14 @@ export function StockForecast() {
       form.reset({ ticker: state.ticker || "" });
     }
   }, [state, toast, form]);
+
+  const handlePopularTickerClick = (ticker: string) => {
+    form.setValue("ticker", ticker, { shouldValidate: true });
+    // Use a short delay to allow React to re-render the input before submitting
+    setTimeout(() => {
+      formRef.current?.requestSubmit();
+    }, 50);
+  };
   
   const renderContent = () => {
     if (pending) {
@@ -144,7 +156,7 @@ export function StockForecast() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form action={formAction} className="flex flex-col sm:flex-row items-end gap-4 mb-8">
+          <form ref={formRef} action={formAction} className="flex flex-col sm:flex-row items-start sm:items-end gap-4 mb-2">
             <FormField
               control={form.control}
               name="ticker"
@@ -161,6 +173,23 @@ export function StockForecast() {
             <SubmitButton />
           </form>
         </Form>
+
+        <div className="flex items-center gap-2 mb-8">
+            <span className="text-sm text-muted-foreground">Try:</span>
+            <div className="flex flex-wrap gap-2">
+              {popularTickers.map((ticker) => (
+                <Button
+                  key={ticker}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePopularTickerClick(ticker)}
+                  className="text-primary hover:bg-primary/10"
+                >
+                  {ticker}
+                </Button>
+              ))}
+            </div>
+          </div>
         
         <div className="mt-4 min-h-[280px]">
           {renderContent()}
