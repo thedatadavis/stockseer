@@ -45,7 +45,8 @@ const getStockForecastTool = ai.defineTool(
     if (currentPrice === undefined) {
       throw new Error('Current price is required to generate a forecast.');
     }
-
+    
+    // Helper to get the next trading day, skipping weekends.
     const getNextTradingDay = (date: Date): Date => {
       const newDate = new Date(date);
       newDate.setDate(newDate.getDate() + 1);
@@ -69,25 +70,24 @@ const getStockForecastTool = ai.defineTool(
     // If it's a weekday after 4 PM ET, or if it's a weekend, start forecast from the next trading day.
     if ((dayOfWeekET >= 1 && dayOfWeekET <= 5 && hourET >= 16) || dayOfWeekET === 6 || dayOfWeekET === 0) {
       currentDate = getNextTradingDay(nowInET);
+    } else {
+        // If the market is open, ensure we are not on a weekend day from a timezone shift
+        const day = currentDate.getDay();
+        if (day === 6) { // Saturday
+            currentDate.setDate(currentDate.getDate() + 2);
+        } else if (day === 0) { // Sunday
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
     }
-
+    
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        // If the current date is a weekend, advance it to the next trading day. This handles the initial start date.
-        const day = currentDate.getDay();
-        if (day === 6) { // Saturday
-          currentDate.setDate(currentDate.getDate() + 2);
-        } else if (day === 0) { // Sunday
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-
         const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01); // +/- 0.5% from last close
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1% from open
         const projectedGainLoss = closingPrice - openingPrice;
-        
-        // Format date robustly to YYYY-MM-DD
+
         const year = currentDate.getFullYear();
         const month = String(currentDate.getMonth() + 1).padStart(2, '0');
         const dayOfMonth = String(currentDate.getDate()).padStart(2, '0');
