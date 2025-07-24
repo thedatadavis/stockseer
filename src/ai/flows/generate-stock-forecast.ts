@@ -83,8 +83,8 @@ const getStockForecastTool = ai.defineTool(
           currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1%
-        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.04); // +/- 2%
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01); // +/- 0.5% from last close
+        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1% from open
         const projectedGainLoss = closingPrice - openingPrice;
         
         forecast.push({
