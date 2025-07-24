@@ -116,9 +116,10 @@ function calculate52WeekPricePosition(bars: Bar[]): PricePosition52w {
         return { high: 0, low: 0, position: 0 };
     }
 
-    const high = Math.max(...bars.map(b => b.h));
-    const low = Math.min(...bars.map(b => b.l));
-    const currentPrice = bars[bars.length - 1].c;
+    const relevantBars = bars.slice(-252); // Use up to the last 52 weeks of data
+    const high = Math.max(...relevantBars.map(b => b.h));
+    const low = Math.min(...relevantBars.map(b => b.l));
+    const currentPrice = relevantBars[relevantBars.length - 1].c;
     
     const position = (high - low) > 0 ? (currentPrice - low) / (high - low) : 0.5;
 
@@ -131,7 +132,6 @@ function calculateDayOfWeekPerformance(bars: Bar[]): DayOfWeekPerformance[] {
     const performance: { [day: string]: { gains: number[], losses: number[], wins: number, total: number } } = {};
 
     for (const bar of bars) {
-        // Timestamps from Alpaca are UTC. We create a date object assuming it's in a consistent timezone.
         const date = new Date(bar.t);
         const dayOfWeek = dayNames[date.getUTCDay()];
 
