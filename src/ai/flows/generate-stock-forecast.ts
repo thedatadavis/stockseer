@@ -7,9 +7,25 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 import { getLatestQuote, getHistoricalBars } from '@/services/alpaca';
 import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/statistics';
+import Handlebars from 'handlebars';
+
+// Register Handlebars helpers
+Handlebars.registerHelper('displayPercent', function (value) {
+    if (typeof value !== 'number') return 'N/A';
+    return `${(value * 100).toFixed(2)}%`;
+});
+
+Handlebars.registerHelper('toFixed', function (value, digits) {
+    if (typeof value !== 'number') return 'N/A';
+    return value.toFixed(digits);
+});
+
+Handlebars.registerHelper('gt', function (a, b) {
+    return a > b;
+});
 
 
 function getNextFiveBusinessDays(): Date[] {
@@ -119,6 +135,9 @@ Generate a JSON object that conforms to the output schema.
 For each day, provide a projected opening price, closing price, and the projected gain or loss (closing - opening).
 Ensure the 'projectedGainLoss' is correctly calculated.
 Ensure the forecast array in the JSON output contains exactly 5 days. Do not include logs in the output.`,
+    template: {
+      helpers: Handlebars.helpers,
+    }
   });
   
 const generateStockForecastFlow = ai.defineFlow(
@@ -159,20 +178,3 @@ const generateStockForecastFlow = ai.defineFlow(
     };
   }
 );
-
-// Register Handlebars helpers
-import Handlebars from 'handlebars';
-
-Handlebars.registerHelper('displayPercent', function (value) {
-  if (typeof value !== 'number') return 'N/A';
-  return `${(value * 100).toFixed(2)}%`;
-});
-
-Handlebars.registerHelper('toFixed', function (value, digits) {
-    if (typeof value !== 'number') return 'N/A';
-    return value.toFixed(digits);
-});
-
-Handlebars.registerHelper('gt', function (a, b) {
-    return a > b;
-});
