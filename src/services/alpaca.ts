@@ -31,6 +31,13 @@ export async function getLatestQuote(ticker: string) {
   }
 }
 
+function formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 /**
  * Fetches historical daily bar data for a given stock ticker.
  * @param ticker The stock ticker symbol.
@@ -44,8 +51,8 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
 
     try {
         const barsGenerator = alpaca.getBarsV2(ticker, {
-            start: startDate.toISOString().split('T')[0],
-            end: endDate.toISOString().split('T')[0],
+            start: formatDate(startDate),
+            end: formatDate(endDate),
             timeframe: '1Day',
             adjustment: 'split'
         });
