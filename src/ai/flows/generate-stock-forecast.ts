@@ -45,47 +45,60 @@ const getStockForecastTool = ai.defineTool(
     if (currentPrice === undefined) {
       throw new Error('Current price is required to generate a forecast.');
     }
-    
+
     const getNextTradingDay = (date: Date): Date => {
-        const newDate = new Date(date);
-        newDate.setDate(newDate.getDate() + 1);
-        const day = newDate.getDay();
-        if (day === 6) { // Saturday -> Monday
-            newDate.setDate(newDate.getDate() + 2);
-        } else if (day === 0) { // Sunday -> Monday
-            newDate.setDate(newDate.getDate() + 1);
-        }
-        return newDate;
+      const newDate = new Date(date);
+      newDate.setDate(newDate.getDate() + 1);
+      return newDate;
     };
     
     const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    
-    let currentDate = nowInET;
+    console.log('Initial time in ET:', nowInET.toString());
+
+    let currentDate = new Date(nowInET);
     const dayOfWeekET = nowInET.getDay();
     const hourET = nowInET.getHours();
 
-    // If it's a weekend, start from next Monday.
+    // If it's a weekend or after-hours on a weekday, move to the next trading day
     if (dayOfWeekET === 6) { // Saturday
         currentDate.setDate(currentDate.getDate() + 2);
     } else if (dayOfWeekET === 0) { // Sunday
         currentDate.setDate(currentDate.getDate() + 1);
-    }
-    // If it's a weekday after 4 PM ET, start from the next trading day.
-    else if (hourET >= 16) {
-        currentDate = getNextTradingDay(currentDate);
+    } else if (hourET >= 16) { // Weekday after 4 PM
+        currentDate.setDate(currentDate.getDate() + 1);
     }
     
+    // Ensure the adjusted start date is not a weekend
+    const adjustedStartDay = currentDate.getDay();
+    if (adjustedStartDay === 6) { // If it's now Saturday
+        currentDate.setDate(currentDate.getDate() + 2);
+    } else if (adjustedStartDay === 0) { // If it's now Sunday
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    console.log('Calculated forecast start date:', currentDate.toString());
+
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01); 
+        let forecastDate = new Date(currentDate);
+        let dayOfWeek = forecastDate.getDay();
+
+        while (dayOfWeek === 0 || dayOfWeek === 6) {
+            forecastDate.setDate(forecastDate.getDate() + 1);
+            dayOfWeek = forecastDate.getDay();
+        }
+
+        console.log(`Loop ${i}: Processing date`, forecastDate.toString());
+
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01);
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
         const projectedGainLoss = closingPrice - openingPrice;
 
-        const year = currentDate.getFullYear();
-        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-        const dayOfMonth = String(currentDate.getDate()).padStart(2, '0');
+        const year = forecastDate.getFullYear();
+        const month = String(forecastDate.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(forecastDate.getDate()).padStart(2, '0');
         const formattedDate = `${year}-${month}-${dayOfMonth}`;
 
         forecast.push({
@@ -96,7 +109,7 @@ const getStockForecastTool = ai.defineTool(
         });
 
         lastClosingPrice = closingPrice;
-        currentDate = getNextTradingDay(currentDate);
+        currentDate.setDate(currentDate.getDate() + 1);
     }
     
     return { forecast };
