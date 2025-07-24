@@ -112,14 +112,13 @@ function calculateAverageTrueRange(bars: Bar[], period: number): number {
 }
 
 function calculate52WeekPricePosition(bars: Bar[]): PricePosition52w {
-    const barsInLastYear = bars.slice(-252); // Approx 252 trading days in a year
-    if (barsInLastYear.length === 0) {
+    if (bars.length === 0) {
         return { high: 0, low: 0, position: 0 };
     }
 
-    const high = Math.max(...barsInLastYear.map(b => b.HighPrice));
-    const low = Math.min(...barsInLastYear.map(b => b.LowPrice));
-    const currentPrice = barsInLastYear[barsInLastYear.length - 1].ClosePrice;
+    const high = Math.max(...bars.map(b => b.HighPrice));
+    const low = Math.min(...bars.map(b => b.LowPrice));
+    const currentPrice = bars[bars.length - 1].ClosePrice;
     
     const position = (high - low) > 0 ? (currentPrice - low) / (high - low) : 0.5;
 
