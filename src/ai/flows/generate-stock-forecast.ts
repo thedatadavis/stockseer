@@ -15,15 +15,13 @@ import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/sta
 const handlebarsHelpers = {
     displayPercent: function (value: number) {
         if (typeof value !== 'number') return 'N/A';
-        return `${(value * 100).toFixed(2)}%`;
+        const percentage = (value * 100);
+        return `${percentage > 0 ? '+' : ''}${percentage.toFixed(2)}%`;
     },
     toFixed: function (value: number, digits: number) {
         if (typeof value !== 'number') return 'N/A';
         return value.toFixed(digits);
     },
-    gt: function (a: number, b: number) {
-        return a > b;
-    }
 };
 
 
@@ -116,7 +114,7 @@ You have been provided with the current price and a set of key historical statis
 
 - Current Price: \${{{currentPrice}}}
 - Consecutive Up/Down Days: {{{historicalContext.consecutiveGainLossStreak.days}}} days of {{{historicalContext.consecutiveGainLossStreak.direction}}}
-- Recent Performance: 1-day: {{#if (gt historicalContext.recentPerformance.change_1d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_1d}}}, 5-day: {{#if (gt historicalContext.recentPerformance.change_5d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_5d}}}, 30-day: {{#if (gt historicalContext.recentPerformance.change_30d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_30d}}}
+- Recent Performance: 1-day: {{{displayPercent historicalContext.recentPerformance.change_1d}}}, 5-day: {{{displayPercent historicalContext.recentPerformance.change_5d}}}, 30-day: {{{displayPercent historicalContext.recentPerformance.change_30d}}}
 - 14-Day Average Volatility (ATR): \${{{toFixed historicalContext.averageTrueRange_14d 2}}}
 - Position in 52-Week Range: Currently at {{{displayPercent historicalContext.pricePosition_52w.position}}} (Low: \${{{historicalContext.pricePosition_52w.low}}}, High: \${{{historicalContext.pricePosition_52w.high}}})
 - Day-of-Week Tendencies:
