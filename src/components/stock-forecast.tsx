@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,7 +36,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getForecastAction, type ForecastState } from '@/app/actions/get-forecast-action';
-import { useEffect } from 'react';
 
 const formSchema = z.object({
   ticker: z.string().min(1, 'Ticker is required').max(10, 'Ticker is too long').toUpperCase(),
@@ -64,6 +63,7 @@ export function StockForecast() {
   const [state, formAction] = useActionState(getForecastAction, initialState);
   const { pending } = useFormStatus();
   const { toast } = useToast();
+  const [clientForecast, setClientForecast] = useState<GenerateStockForecastOutput | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -80,8 +80,52 @@ export function StockForecast() {
         variant: "destructive",
       });
     }
-    if (!pending) {
+
+    if (state.ticker && !pending) {
       form.reset({ ticker: state.ticker || "" });
+      
+      // Generate mock forecast data on the client
+      const getNextWeekday = (date: Date) => {
+        const newDate = new Date(date);
+        newDate.setUTCDate(newDate.getUTCDate() + (newDate.getUTCDay() === 5 ? 3 : newDate.getUTCDay() === 6 ? 2 : 1));
+        return newDate;
+      };
+
+      const isMarketOpen = (now: Date) => {
+        const hours = now.getUTCHours();
+        const day = now.getUTCDay();
+        // Market is open 9:30 AM - 4 PM ET, rough approximation in UTC
+        return day >= 1 && day <= 5 && hours >= 13 && hours < 21;
+      };
+      
+      let startDate = new Date();
+      if (!isMarketOpen(startDate)) {
+          startDate = getNextWeekday(startDate);
+      }
+
+      const forecast = [];
+      let currentDate = new Date(startDate);
+
+      while (forecast.length < 5) {
+        const day = currentDate.getUTCDay();
+        if (day !== 0 && day !== 6) { // Skip weekends
+            const dateString = currentDate.toISOString().slice(0, 10);
+            const openingPrice = Math.random() * 100 + 100;
+            const closingPrice = openingPrice + (Math.random() * 10 - 5);
+            const projectedGainLoss = closingPrice - openingPrice;
+            forecast.push({
+                date: dateString,
+                openingPrice: parseFloat(openingPrice.toFixed(2)),
+                closingPrice: parseFloat(closingPrice.toFixed(2)),
+                projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
+            });
+        }
+        currentDate = getNextWeekday(currentDate);
+      }
+      setClientForecast({ forecast });
+
+    } else if (!state.ticker) {
+      setClientForecast(null);
     }
   }, [state, toast, form, pending]);
   
@@ -90,11 +134,11 @@ export function StockForecast() {
       return <ForecastTableSkeleton />;
     }
 
-    if (state.forecast) {
+    if (clientForecast) {
       return (
         <div className="animate-in fade-in-50 duration-500">
           <h2 className="text-2xl font-bold mb-4 font-headline">5-Day Forecast for {state.ticker}</h2>
-          <ForecastTable forecastData={state.forecast} />
+          <ForecastTable forecastData={clientForecast} />
         </div>
       );
     }
@@ -152,14 +196,17 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
   }
 
   const formatDate = (dateString: string) => {
-    const parts = dateString.split('-').map(part => parseInt(part, 10));
-    // Note: months are 0-indexed in JavaScript Date
-    const date = new Date(parts[0], parts[1] - 1, parts[2]);
-    return date.toLocaleDateString('en-US', {
+    // When constructing a date from a YYYY-MM-DD string, it's treated as UTC.
+    // To display it correctly in the user's local timezone's calendar date,
+    // we need to account for the timezone offset.
+    const date = new Date(dateString);
+    const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+    const dateInUserTz = new Date(date.getTime() + userTimezoneOffset);
+    
+    return dateInUserTz.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC',
     });
   };
 
