@@ -49,54 +49,65 @@ const getStockForecastTool = ai.defineTool(
 
     const logs: string[] = [];
 
-    const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    logs.push(`Initial time in ET: ${nowInET.toString()}`);
+    // Use Intl.DateTimeFormat to reliably get parts of the date in a specific timezone.
+    const etTimeZone = 'America/New_York';
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: etTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: 'numeric',
+      hour12: false,
+      weekday: 'short',
+    });
 
-    let currentDate = new Date(nowInET);
-    const dayOfWeekET = nowInET.getDay();
-    const hourET = nowInET.getHours();
+    const parts = formatter.formatToParts(now);
+    const partValues: { [key: string]: string } = {};
+    for (const part of parts) {
+        partValues[part.type] = part.value;
+    }
 
-    // If it's a weekend or after-hours on a weekday, move to the next trading day
+    const year = parseInt(partValues.year);
+    const month = parseInt(partValues.month) - 1; // Month is 0-indexed
+    const day = parseInt(partValues.day);
+    const hourET = parseInt(partValues.hour);
+    const dayOfWeekET = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(partValues.weekday);
+
+    let currentDate = new Date(Date.UTC(year, month, day));
+    logs.push(`Current ET Date: ${currentDate.toUTCString()}, Hour: ${hourET}, Day: ${dayOfWeekET}`);
+
+    // Adjust start date based on market hours
     if (dayOfWeekET === 6) { // Saturday
-        currentDate.setDate(currentDate.getDate() + 2);
+      currentDate.setUTCDate(currentDate.getUTCDate() + 2);
     } else if (dayOfWeekET === 0) { // Sunday
-        currentDate.setDate(currentDate.getDate() + 1);
-    } else if (hourET >= 16) { // Weekday after 4 PM
-        currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    } else if (hourET >= 16) { // Weekday after 4 PM ET
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+      // If it was a Friday, advance to Monday
+      if (currentDate.getUTCDay() === 6) { 
+        currentDate.setUTCDate(currentDate.getUTCDate() + 2);
+      }
     }
-    
-    // Ensure the adjusted start date is not a weekend
-    const adjustedStartDay = currentDate.getDay();
-    if (adjustedStartDay === 6) { // If it's now Saturday
-        currentDate.setDate(currentDate.getDate() + 2);
-    } else if (adjustedStartDay === 0) { // If it's now Sunday
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    logs.push(`Calculated forecast start date: ${currentDate.toString()}`);
+
+    logs.push(`Calculated forecast start date: ${currentDate.toUTCString()}`);
 
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        let forecastDate = new Date(currentDate);
-        let dayOfWeek = forecastDate.getDay();
-
-        while (dayOfWeek === 0 || dayOfWeek === 6) {
-            forecastDate.setDate(forecastDate.getDate() + 1);
-            dayOfWeek = forecastDate.getDay();
+        // Skip weekends
+        while (currentDate.getUTCDay() === 6 || currentDate.getUTCDay() === 0) {
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
         }
-
-        logs.push(`Loop ${i}: Processing date ${forecastDate.toString()}`);
+        
+        logs.push(`Loop ${i}: Processing date ${currentDate.toUTCString()}`);
 
         const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01);
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
         const projectedGainLoss = closingPrice - openingPrice;
 
-        const year = forecastDate.getFullYear();
-        const month = String(forecastDate.getMonth() + 1).padStart(2, '0');
-        const dayOfMonth = String(forecastDate.getDate()).padStart(2, '0');
-        const formattedDate = `${year}-${month}-${dayOfMonth}`;
+        const formattedDate = currentDate.toISOString().split('T')[0];
 
         forecast.push({
             date: formattedDate,
@@ -106,7 +117,8 @@ const getStockForecastTool = ai.defineTool(
         });
 
         lastClosingPrice = closingPrice;
-        currentDate.setDate(currentDate.getDate() + 1);
+        // Advance to the next calendar day for the next loop iteration
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
     
     return { forecast, logs };
