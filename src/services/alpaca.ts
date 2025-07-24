@@ -19,15 +19,13 @@ export async function getLatestQuote(ticker: string) {
   try {
     const quote = await alpaca.getLatestQuote(ticker);
     return quote;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error fetching quote for ${ticker} from Alpaca:`, error);
-    if (error instanceof Error) {
-        if (error.message.includes('HTTP 404')) {
-            throw new Error(`Ticker symbol '${ticker}' not found.`);
-        }
-        if (error.message.includes('HTTP 401') || error.message.includes('forbidden')) {
-            throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
-        }
+    if (error.statusCode === 404 || (error.message && error.message.includes('HTTP 404'))) {
+        throw new Error(`Ticker symbol '${ticker}' not found.`);
+    }
+    if (error.statusCode === 401 || (error.message && (error.message.includes('HTTP 401') || error.message.includes('forbidden')))) {
+        throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
     }
     throw new Error(`Could not retrieve quote for ${ticker}.`);
   }
@@ -58,15 +56,13 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
         }
         return bars;
         
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error fetching historical bars for ${ticker} from Alpaca:`, error);
-        if (error instanceof Error) {
-            if (error.message.includes('HTTP 404')) {
-                throw new Error(`Ticker symbol '${ticker}' not found.`);
-            }
-            if (error.message.includes('HTTP 401') || error.message.includes('forbidden')) {
-                throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
-            }
+        if (error.statusCode === 404 || (error.message && error.message.includes('HTTP 404'))) {
+            throw new Error(`Ticker symbol '${ticker}' not found.`);
+        }
+        if (error.statusCode === 401 || (error.message && (error.message.includes('HTTP 401') || error.message.includes('forbidden')))) {
+            throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
         }
         throw new Error(`Could not retrieve historical data for ${ticker}.`);
     }
