@@ -46,38 +46,34 @@ const getStockForecastTool = ai.defineTool(
       throw new Error('Current price is required to generate a forecast.');
     }
     
-    // Helper to get the next trading day, skipping weekends.
     const getNextTradingDay = (date: Date): Date => {
-      const newDate = new Date(date);
-      newDate.setDate(newDate.getDate() + 1);
-      const day = newDate.getDay();
-      if (day === 6) { // Saturday
-        newDate.setDate(newDate.getDate() + 2);
-      } else if (day === 0) { // Sunday
+        const newDate = new Date(date);
         newDate.setDate(newDate.getDate() + 1);
-      }
-      return newDate;
+        const day = newDate.getDay();
+        if (day === 6) { // Saturday -> Monday
+            newDate.setDate(newDate.getDate() + 2);
+        } else if (day === 0) { // Sunday -> Monday
+            newDate.setDate(newDate.getDate() + 1);
+        }
+        return newDate;
     };
-
+    
     // Get the current date in ET
     const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     
-    // Determine the starting date for the forecast
     let currentDate = new Date(nowInET);
-    const dayOfWeekET = nowInET.getDay(); // Sunday - Saturday : 0 - 6
+    const dayOfWeekET = nowInET.getDay();
     const hourET = nowInET.getHours();
 
-    // If it's a weekday after 4 PM ET, or if it's a weekend, start forecast from the next trading day.
-    if ((dayOfWeekET >= 1 && dayOfWeekET <= 5 && hourET >= 16) || dayOfWeekET === 6 || dayOfWeekET === 0) {
-      currentDate = getNextTradingDay(nowInET);
-    } else {
-        // If the market is open, ensure we are not on a weekend day from a timezone shift
-        const day = currentDate.getDay();
-        if (day === 6) { // Saturday
-            currentDate.setDate(currentDate.getDate() + 2);
-        } else if (day === 0) { // Sunday
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
+    // If it's a weekend, start from next Monday.
+    if (dayOfWeekET === 6) { // Saturday
+        currentDate.setDate(currentDate.getDate() + 2);
+    } else if (dayOfWeekET === 0) { // Sunday
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    // If it's a weekday after 4 PM ET, start from the next trading day.
+    else if (hourET >= 16) {
+        currentDate = getNextTradingDay(currentDate);
     }
     
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
