@@ -66,10 +66,6 @@ export async function getLatestQuote(ticker: string): Promise<Quote> {
     }
 }
 
-function formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
-}
-
 /**
  * Fetches historical daily bar data for a given stock ticker.
  * @param ticker The stock ticker symbol.
