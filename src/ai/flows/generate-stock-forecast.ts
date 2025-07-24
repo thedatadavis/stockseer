@@ -45,6 +45,8 @@ function getNextFiveBusinessDays(logs: string[]): Date[] {
     // Use UTC functions to avoid local timezone interference.
     let currentDate = new Date(Date.UTC(year, month, day));
     logs.push(`[Date Util] Starting with ET date: ${currentDate.toUTCString()}`);
+    logs.push(`[Date Util] Current ET hour: ${hour}`);
+
 
     const dayOfWeek = currentDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
 
@@ -56,9 +58,11 @@ function getNextFiveBusinessDays(logs: string[]): Date[] {
         // Skip weekend
         if (currentDate.getUTCDay() === 6) { // If it's now Saturday...
             currentDate.setUTCDate(currentDate.getUTCDate() + 2); // ...move to Monday.
+            logs.push(`[Date Util] Advanced from Sat to Mon.`);
         }
         if (currentDate.getUTCDay() === 0) { // If it's now Sunday...
             currentDate.setUTCDate(currentDate.getUTCDate() + 1); // ...move to Monday.
+            logs.push(`[Date Util] Advanced from Sun to Mon.`);
         }
     }
     
@@ -101,59 +105,7 @@ export async function generateStockForecast(input: GenerateStockForecastInput): 
   return generateStockForecastFlow(input);
 }
 
-const getStockForecastTool = ai.defineTool(
-  {
-    name: 'getStockForecast',
-    description: 'Returns a 5-day stock forecast, including projected daily gains/losses for a given stock ticker.',
-    inputSchema: GenerateStockForecastInputSchema,
-    outputSchema: GenerateStockForecastOutputSchema,
-  },
-  async ({ ticker, currentPrice }) => {
-    if (currentPrice === undefined) {
-      throw new Error('Current price is required to generate a forecast.');
-    }
-
-    const logs: string[] = [];
-    const forecastDates = getNextFiveBusinessDays(logs);
-
-    const forecast: z.infer<typeof ForecastDaySchema>[] = [];
-    let lastClosingPrice = currentPrice;
-
-    for (const date of forecastDates) {
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.49) * 0.01);
-        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
-        const projectedGainLoss = closingPrice - openingPrice;
-
-        const formattedDate = date.toISOString().split('T')[0];
-
-        forecast.push({
-            date: formattedDate,
-            openingPrice: parseFloat(openingPrice.toFixed(2)),
-            closingPrice: parseFloat(closingPrice.toFixed(2)),
-            projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
-        });
-
-        lastClosingPrice = closingPrice;
-    }
-    
-    return { forecast, logs };
-  }
-);
-
-
-const generateStockForecastPrompt = ai.definePrompt({
-  name: 'generateStockForecastPrompt',
-  tools: [getStockForecastTool],
-  input: {schema: GenerateStockForecastInputSchema},
-  output: {schema: GenerateStockForecastOutputSchema},
-  prompt: `You are a financial analyst. The user will provide you with a stock ticker.
-  Your task is to provide a 5-day forecast.
-  Use the getStockForecast tool to get the forecast.
-
-  The user is asking about: {{{ticker}}}
-  The current price is: {{{currentPrice}}}`,
-});
-
+// This is a temporary debugging flow that ONLY returns dates and logs.
 const generateStockForecastFlow = ai.defineFlow(
   {
     name: 'generateStockForecastFlow',
@@ -161,13 +113,23 @@ const generateStockForecastFlow = ai.defineFlow(
     outputSchema: GenerateStockForecastOutputSchema,
   },
   async ({ ticker }) => {
-    const quote = await getLatestQuote(ticker);
-    if (!quote) {
-      throw new Error(`Could not retrieve quote for ${ticker}`);
-    }
-
-    const {output} = await generateStockForecastPrompt({ ticker, currentPrice: quote.AskPrice });
+    const logs: string[] = [];
+    const forecastDates = getNextFiveBusinessDays(logs);
     
-    return output!;
+    // Create dummy forecast data just to satisfy the schema.
+    // The key is that the dates are from our calculation.
+    const dummyForecast = forecastDates.map(date => ({
+        date: date.toISOString().split('T')[0],
+        openingPrice: 0,
+        closingPrice: 0,
+        projectedGainLoss: 0,
+    }));
+
+    logs.push("DEBUG: Bypassing AI forecast generation. Returning only calculated dates.");
+
+    return {
+        forecast: dummyForecast,
+        logs: logs,
+    };
   }
 );

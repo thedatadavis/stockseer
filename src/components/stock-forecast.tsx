@@ -61,7 +61,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-      {pending ? "Getting Forecast..." : "Get Forecast"}
+      {pending ? "Getting Dates..." : "Get Dates"}
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   );
@@ -75,7 +75,7 @@ export function StockForecast() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ticker: "",
+      ticker: "GOOGL",
     },
   });
 
@@ -92,16 +92,23 @@ export function StockForecast() {
     }
   }, [state, toast, form]);
   
-  const renderTable = () => {
+  const renderContent = () => {
     if (pending) {
       return <ForecastTableSkeleton />;
     }
 
+    // This is the new debug view. It just shows the dates.
     if (state.forecast) {
       return (
         <div className="animate-in fade-in-50 duration-500">
-          <h2 className="text-2xl font-bold mb-4 font-headline">5-Day Forecast for {state.ticker}</h2>
-          <ForecastTable forecastData={state.forecast} />
+          <h2 className="text-2xl font-bold mb-4 font-headline">Calculated Dates for {state.ticker}</h2>
+          <div className="p-4 bg-muted rounded-md">
+            <ul className="space-y-2">
+              {state.forecast.forecast.map(day => (
+                <li key={day.date} className="font-mono text-lg">{day.date}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       );
     }
@@ -109,7 +116,7 @@ export function StockForecast() {
     return (
       <div className="text-center py-10">
         <TrendingUp className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">Ready to see the future?</h3>
+        <h3 className="mt-4 text-lg font-medium">Ready to test the date logic?</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Enter a stock ticker above to get started.
         </p>
@@ -120,9 +127,9 @@ export function StockForecast() {
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
       <CardHeader>
-        <CardTitle>Get Stock Forecast</CardTitle>
+        <CardTitle>Get Stock Dates (Debug Mode)</CardTitle>
         <CardDescription>
-          Enter a ticker symbol (e.g., AAPL, MSFT) to get an AI-generated 5-day forecast.
+          This is a debug view to test the date calculation logic from the server.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -146,12 +153,12 @@ export function StockForecast() {
         </Form>
         
         <div className="mt-4 min-h-[280px]">
-          {renderTable()}
+          {renderContent()}
         </div>
       </CardContent>
       {state.logs && state.logs.length > 0 && (
         <CardFooter>
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
               <AccordionItem value="item-1">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
@@ -160,8 +167,8 @@ export function StockForecast() {
                   </div>
                   </AccordionTrigger>
                 <AccordionContent>
-                  <pre className="mt-2 w-full rounded-md bg-slate-950 p-4">
-                    <code className="text-white">
+                  <pre className="mt-2 w-full rounded-md bg-slate-950 p-4 overflow-x-auto">
+                    <code className="text-white text-sm">
                       {state.logs.join('\n')}
                     </code>
                   </pre>
@@ -174,77 +181,15 @@ export function StockForecast() {
   );
 }
 
-function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOutput }) {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-  }
-
-  const formatDate = (dateString: string) => {
-    // The date string is in "YYYY-MM-DD" format. We treat it as UTC to avoid timezone issues.
-    const date = new Date(`${dateString}T00:00:00Z`);
-    return date.toLocaleDateString('en-US', {
-      timeZone: 'UTC', // Display in UTC to match the input
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead className="text-right">Opening Price</TableHead>
-          <TableHead className="text-right">Closing Price</TableHead>
-          <TableHead className="text-right">Projected Gain/Loss</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {forecastData.forecast.map((day) => (
-          <TableRow key={day.date}>
-            <TableCell className="font-medium">{formatDate(day.date)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(day.openingPrice)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(day.closingPrice)}</TableCell>
-            <TableCell
-              className={cn("text-right font-semibold", {
-                'text-emerald-600': day.projectedGainLoss >= 0,
-                'text-destructive': day.projectedGainLoss < 0,
-              })}
-            >
-              {day.projectedGainLoss >= 0 ? '+' : ''}{formatCurrency(day.projectedGainLoss)}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
 function ForecastTableSkeleton() {
   return (
     <div className="space-y-4">
       <Skeleton className="h-8 w-1/2 mb-4" />
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead><Skeleton className="h-5 w-20" /></TableHead>
-            <TableHead className="text-right"><Skeleton className="h-5 w-24 ml-auto" /></TableHead>
-            <TableHead className="text-right"><Skeleton className="h-5 w-24 ml-auto" /></TableHead>
-            <TableHead className="text-right"><Skeleton className="h-5 w-32 ml-auto" /></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: 5 }).map((_, index) => (
-            <TableRow key={index}>
-              <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-              <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-              <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-              <TableCell><Skeleton className="h-5 w-28 ml-auto" /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="p-4 bg-muted rounded-md space-y-2">
+        {Array.from({ length: 5 }).map((_, index) => (
+           <Skeleton key={index} className="h-7 w-32" />
+        ))}
+      </div>
     </div>
   );
 }
