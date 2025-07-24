@@ -115,20 +115,26 @@ export function StockForecast() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {state.forecast.forecast.map((day) => (
-                        <TableRow key={day.date}>
-                            <TableCell className="font-medium">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</TableCell>
-                            <TableCell className="text-right">${day.openingPrice.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">${day.closingPrice.toFixed(2)}</TableCell>
-                            <TableCell className={cn(
-                                "text-right flex items-center justify-end gap-2",
-                                day.projectedGainLoss >= 0 ? "text-green-600" : "text-red-600"
-                            )}>
-                                {day.projectedGainLoss >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                                ${Math.abs(day.projectedGainLoss).toFixed(2)}
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    {state.forecast.forecast.map((day) => {
+                        const percentChange = (day.projectedGainLoss / day.openingPrice) * 100;
+                        return (
+                            <TableRow key={day.date}>
+                                <TableCell className="font-medium">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</TableCell>
+                                <TableCell className="text-right">${day.openingPrice.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">${day.closingPrice.toFixed(2)}</TableCell>
+                                <TableCell className={cn(
+                                    "text-right flex items-center justify-end gap-2",
+                                    day.projectedGainLoss >= 0 ? "text-green-600" : "text-red-600"
+                                )}>
+                                    {day.projectedGainLoss >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                    <div className="flex flex-col items-end">
+                                      <span>${Math.abs(day.projectedGainLoss).toFixed(2)}</span>
+                                      <span className="text-xs text-muted-foreground">({percentChange.toFixed(2)}%)</span>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        )
+                    })}
                 </TableBody>
             </Table>
         </div>
