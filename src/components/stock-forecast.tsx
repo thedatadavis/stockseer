@@ -67,7 +67,7 @@ export function StockForecast() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ticker: "GOOGL",
+      ticker: "",
     },
   });
 
