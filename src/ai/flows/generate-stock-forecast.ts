@@ -3,14 +3,76 @@
 /**
  * @fileOverview Generates a 5-day stock forecast for a given ticker symbol.
  *
- * - generateStockForecast - A function that handles the stock forecast generation.
- * - GenerateStockForecastInput - The input type for the generateStockForecast function.
- * - GenerateStockForecastOutput - The return type for the generateStockForecast function.
+ * This version refactors date generation into a dedicated utility for reliability.
+ *
+ * - getNextFiveBusinessDays - A utility to get an array of the next 5 business days.
+ * - generateStockForecast - The main function that handles the stock forecast generation.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getLatestQuote } from '@/services/alpaca';
+
+/**
+ * Utility function to get an array of the next 5 business days.
+ * It correctly handles timezones, weekends, and ensures dates are in the future.
+ * @returns {Date[]} An array of 5 Date objects.
+ */
+function getNextFiveBusinessDays(logs: string[]): Date[] {
+  const dates: Date[] = [];
+  
+  // 1. Get the current date and time in the US Eastern timezone.
+  const etTimeZone = 'America/New_York';
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: etTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(now);
+  const partValues: { [key: string]: string } = {};
+  for (const part of parts) {
+      partValues[part.type] = part.value;
+  }
+  
+  // 2. Create a reliable, timezone-neutral Date object using UTC.
+  // Always specify radix 10 to prevent parsing bugs.
+  const year = parseInt(partValues.year, 10);
+  const month = parseInt(partValues.month, 10) - 1; // Month is 0-indexed
+  const day = parseInt(partValues.day, 10);
+  const hour = parseInt(partValues.hour, 10);
+  
+  let currentDate = new Date(Date.UTC(year, month, day));
+  logs.push(`[Date Util] Current ET Date determined as: ${currentDate.toUTCString()}, Hour: ${hour}`);
+  
+  const dayOfWeek = currentDate.getUTCDay();
+
+  // 3. If it's after market close on a weekday, or a weekend, start from the next day.
+  if ((dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+      logs.push(`[Date Util] Market closed or weekend. Advancing to next day: ${currentDate.toUTCString()}`);
+  }
+
+  // 4. Loop until we have found 5 business days.
+  while (dates.length < 5) {
+    const currentDayOfWeek = currentDate.getUTCDay();
+    // Day 6 is Saturday, Day 0 is Sunday.
+    if (currentDayOfWeek !== 6 && currentDayOfWeek !== 0) {
+      // It's a business day, add a new Date object to the array.
+      dates.push(new Date(currentDate));
+    }
+    // Advance to the next calendar day for the next check.
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+  
+  logs.push(`[Date Util] Found 5 business days: ${dates.map(d => d.toISOString().split('T')[0]).join(', ')}`);
+  return dates;
+}
+
 
 const GenerateStockForecastInputSchema = z.object({
   ticker: z.string().describe('The stock ticker symbol (e.g., AAPL, MSFT, GOOGL).'),
@@ -49,65 +111,21 @@ const getStockForecastTool = ai.defineTool(
 
     const logs: string[] = [];
 
-    // Use Intl.DateTimeFormat to reliably get parts of the date in a specific timezone.
-    const etTimeZone = 'America/New_York';
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: etTimeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: 'numeric',
-      hour12: false,
-      weekday: 'short',
-    });
-
-    const parts = formatter.formatToParts(now);
-    const partValues: { [key: string]: string } = {};
-    for (const part of parts) {
-        partValues[part.type] = part.value;
-    }
-
-    const year = parseInt(partValues.year);
-    const month = parseInt(partValues.month) - 1; // Month is 0-indexed
-    const day = parseInt(partValues.day);
-    const hourET = parseInt(partValues.hour);
-    const dayOfWeekET = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(partValues.weekday);
-
-    let currentDate = new Date(Date.UTC(year, month, day));
-    logs.push(`Current ET Date: ${currentDate.toUTCString()}, Hour: ${hourET}, Day: ${dayOfWeekET}`);
-
-    // Adjust start date based on market hours
-    if (dayOfWeekET === 6) { // Saturday
-      currentDate.setUTCDate(currentDate.getUTCDate() + 2);
-    } else if (dayOfWeekET === 0) { // Sunday
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    } else if (hourET >= 16) { // Weekday after 4 PM ET
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-      // If it was a Friday, advance to Monday
-      if (currentDate.getUTCDay() === 6) { 
-        currentDate.setUTCDate(currentDate.getUTCDate() + 2);
-      }
-    }
-
-    logs.push(`Calculated forecast start date: ${currentDate.toUTCString()}`);
+    // Get the next 5 business days from our new utility function.
+    const forecastDates = getNextFiveBusinessDays(logs);
 
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
 
-    for (let i = 0; i < 5; i++) {
-        // Skip weekends
-        while (currentDate.getUTCDay() === 6 || currentDate.getUTCDay() === 0) {
-            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-        }
-        
-        logs.push(`Loop ${i}: Processing date ${currentDate.toUTCString()}`);
-
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01);
+    // Iterate over the guaranteed correct dates.
+    for (const date of forecastDates) {
+        // Simulate a small gap between previous close and new opening price
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.49) * 0.01); 
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
         const projectedGainLoss = closingPrice - openingPrice;
 
-        const formattedDate = currentDate.toISOString().split('T')[0];
+        // Format the date to YYYY-MM-DD string.
+        const formattedDate = date.toISOString().split('T')[0];
 
         forecast.push({
             date: formattedDate,
@@ -117,8 +135,6 @@ const getStockForecastTool = ai.defineTool(
         });
 
         lastClosingPrice = closingPrice;
-        // Advance to the next calendar day for the next loop iteration
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
     
     return { forecast, logs };
@@ -152,6 +168,8 @@ const generateStockForecastFlow = ai.defineFlow(
     }
 
     const {output} = await generateStockForecastPrompt({ ticker, currentPrice: quote.AskPrice });
+    
+    // The tool call now handles logging, so we can just return the output.
     return output!;
   }
 );
