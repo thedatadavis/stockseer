@@ -11,20 +11,6 @@ import {z} from 'zod';
 import { getLatestQuote, getHistoricalBars } from '@/services/alpaca';
 import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/statistics';
 
-// Define Handlebars helpers
-const handlebarsHelpers = {
-    displayPercent: function (value: number) {
-        if (typeof value !== 'number') return 'N/A';
-        const percentage = (value * 100);
-        return `${percentage > 0 ? '+' : ''}${percentage.toFixed(2)}%`;
-    },
-    toFixed: function (value: number, digits: number) {
-        if (typeof value !== 'number') return 'N/A';
-        return value.toFixed(digits);
-    },
-};
-
-
 function getNextFiveBusinessDays(): Date[] {
     const dates: Date[] = [];
     const today = new Date();
@@ -67,29 +53,29 @@ const GenerateStockForecastOutputSchema = z.object({
 });
 export type GenerateStockForecastOutput = z.infer<typeof GenerateStockForecastOutputSchema>;
 
-const HistoricalContextSchema = z.object({
+const FormattedHistoricalContextSchema = z.object({
     consecutiveGainLossStreak: z.object({
-        direction: z.enum(['gain', 'loss']),
+        direction: z.string(),
         days: z.number()
     }),
     recentPerformance: z.object({
-        change_1d: z.number(),
-        change_5d: z.number(),
-        change_30d: z.number()
+        change_1d: z.string(),
+        change_5d: z.string(),
+        change_30d: z.string()
     }),
-    averageTrueRange_14d: z.number(),
+    averageTrueRange_14d: z.string(),
     pricePosition_52w: z.object({
-        high: z.number(),
-        low: z.number(),
-        position: z.number()
+        high: z.string(),
+        low: z.string(),
+        position: z.string()
     }),
     dayOfWeekPerformance: z.array(z.object({
         day: z.string(),
-        avgGain: z.number(),
-        avgLoss: z.number(),
-        winRate: z.number()
+        avgGain: z.string(),
+        avgLoss: z.string(),
+        winRate: z.string()
     }))
-}).optional().describe('Calculated historical statistics to improve forecast accuracy.');
+}).optional();
 
 
 export async function generateStockForecast(input: GenerateStockForecastInput): Promise<GenerateStockForecastOutput> {
@@ -102,9 +88,9 @@ const forecastPrompt = ai.definePrompt({
     input: {
       schema: z.object({
         ticker: z.string(),
-        currentPrice: z.number(),
+        currentPrice: z.string(),
         dates: z.array(z.string()),
-        historicalContext: HistoricalContextSchema,
+        historicalContext: FormattedHistoricalContextSchema,
       }),
     },
     output: { schema: GenerateStockForecastOutputSchema },
@@ -112,14 +98,14 @@ const forecastPrompt = ai.definePrompt({
 
 You have been provided with the current price and a set of key historical statistics for the stock: {{{ticker}}}.
 
-- Current Price: \${{{currentPrice}}}
+- Current Price: {{{currentPrice}}}
 - Consecutive Up/Down Days: {{{historicalContext.consecutiveGainLossStreak.days}}} days of {{{historicalContext.consecutiveGainLossStreak.direction}}}
-- Recent Performance: 1-day: {{{displayPercent historicalContext.recentPerformance.change_1d}}}, 5-day: {{{displayPercent historicalContext.recentPerformance.change_5d}}}, 30-day: {{{displayPercent historicalContext.recentPerformance.change_30d}}}
-- 14-Day Average Volatility (ATR): \${{{toFixed historicalContext.averageTrueRange_14d 2}}}
-- Position in 52-Week Range: Currently at {{{displayPercent historicalContext.pricePosition_52w.position}}} (Low: \${{{historicalContext.pricePosition_52w.low}}}, High: \${{{historicalContext.pricePosition_52w.high}}})
+- Recent Performance: 1-day: {{{historicalContext.recentPerformance.change_1d}}}, 5-day: {{{historicalContext.recentPerformance.change_5d}}}, 30-day: {{{historicalContext.recentPerformance.change_30d}}}
+- 14-Day Average Volatility (ATR): {{{historicalContext.averageTrueRange_14d}}}
+- Position in 52-Week Range: Currently at {{{historicalContext.pricePosition_52w.position}}} (Low: {{{historicalContext.pricePosition_52w.low}}}, High: {{{historicalContext.pricePosition_52w.high}}})
 - Day-of-Week Tendencies:
 {{#each historicalContext.dayOfWeekPerformance}}
-  - {{this.day}}: Tends to gain {{displayPercent this.avgGain}} vs lose {{displayPercent this.avgLoss}}, with a {{displayPercent this.winRate}} win rate.
+  - {{this.day}}: Tends to gain {{this.avgGain}} vs lose {{this.avgLoss}}, with a {{this.winRate}} win rate.
 {{/each}}
 - Forecast for the next 5 trading days:
 {{#each dates}}
@@ -132,9 +118,6 @@ Generate a JSON object that conforms to the output schema.
 For each day, provide a projected opening price, closing price, and the projected gain or loss (closing - opening).
 Ensure the 'projectedGainLoss' is correctly calculated.
 Ensure the forecast array in the JSON output contains exactly 5 days. Do not include logs in the output.`,
-    template: {
-      helpers: handlebarsHelpers,
-    }
   });
   
 const generateStockForecastFlow = ai.defineFlow(
@@ -153,11 +136,38 @@ const generateStockForecastFlow = ai.defineFlow(
     const forecastDates = getNextFiveBusinessDays();
     const formattedDates = forecastDates.map(d => d.toISOString().split('T')[0]);
 
+    // Pre-format the historical context for the prompt
+    const toPercent = (val: number) => `${val >= 0 ? '+' : ''}${(val * 100).toFixed(2)}%`;
+    const toCurrency = (val: number) => `$${val.toFixed(2)}`;
+
+    const formattedContext = {
+      consecutiveGainLossStreak: {
+        ...historicalContext.consecutiveGainLossStreak,
+      },
+      recentPerformance: {
+        change_1d: toPercent(historicalContext.recentPerformance.change_1d),
+        change_5d: toPercent(historicalContext.recentPerformance.change_5d),
+        change_30d: toPercent(historicalContext.recentPerformance.change_30d),
+      },
+      averageTrueRange_14d: toCurrency(historicalContext.averageTrueRange_14d),
+      pricePosition_52w: {
+        high: toCurrency(historicalContext.pricePosition_52w.high),
+        low: toCurrency(historicalContext.pricePosition_52w.low),
+        position: toPercent(historicalContext.pricePosition_52w.position),
+      },
+      dayOfWeekPerformance: historicalContext.dayOfWeekPerformance.map(d => ({
+        day: d.day,
+        avgGain: toPercent(d.avgGain),
+        avgLoss: toPercent(d.avgLoss),
+        winRate: toPercent(d.winRate),
+      })),
+    };
+
     const { output } = await forecastPrompt({
       ticker,
-      currentPrice,
+      currentPrice: toCurrency(currentPrice),
       dates: formattedDates,
-      historicalContext,
+      historicalContext: formattedContext,
     });
     
     if (!output) {
