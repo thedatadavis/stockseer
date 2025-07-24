@@ -1,41 +1,73 @@
 
 "use server";
 
-import Alpaca from '@alpacahq/alpaca-trade-api';
-import { type Bar } from '@alpacahq/alpaca-trade-api';
+const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
+const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET;
+const ALPACA_DATA_URL = "https://data.alpaca.markets/v2";
 
-const alpaca = new Alpaca({
-  keyId: process.env.ALPACA_API_KEY,
-  secretKey: process.env.ALPACA_API_SECRET,
-  paper: true, // Use paper trading environment
-});
+export interface Bar {
+  t: string; // Timestamp
+  o: number; // Open
+  h: number; // High
+  l: number; // Low
+  c: number; // Close
+  v: number; // Volume
+}
+
+export interface Quote {
+    t: string; // Timestamp
+    ax: string; // Ask Exchange
+    ap: number; // Ask Price
+    as: number; // Ask Size
+    bx: string; // Bid Exchange
+    bp: number; // Bid Price
+    bs: number; // Bid Size
+    c: string[]; // Condition
+    z: string; // Tape
+}
+
+async function handleAlpacaError(response: Response, ticker: string) {
+    if (response.status === 401) {
+        throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
+    }
+    if (response.status === 404) {
+        throw new Error(`Ticker symbol '${ticker}' not found.`);
+    }
+    const errorBody = await response.text();
+    console.error(`Error fetching from Alpaca for ${ticker}:`, response.status, errorBody);
+    throw new Error(`Could not retrieve data for ${ticker}. Status: ${response.status}`);
+}
 
 /**
  * Fetches the latest quote for a given stock ticker.
  * @param ticker The stock ticker symbol.
  * @returns The latest quote data.
  */
-export async function getLatestQuote(ticker: string) {
-  try {
-    const quote = await alpaca.getLatestQuote(ticker);
-    return quote;
-  } catch (error: any) {
-    console.error(`Error fetching quote for ${ticker} from Alpaca:`, error);
-    if (error.statusCode === 404 || (error.message && error.message.includes('HTTP 404'))) {
-        throw new Error(`Ticker symbol '${ticker}' not found.`);
+export async function getLatestQuote(ticker: string): Promise<Quote> {
+    const url = `${ALPACA_DATA_URL}/stocks/${ticker}/quotes/latest`;
+    const options = {
+        method: 'GET',
+        headers: {
+            'APCA-API-KEY-ID': ALPACA_API_KEY!,
+            'APCA-API-SECRET-KEY': ALPACA_API_SECRET!,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            await handleAlpacaError(response, ticker);
+        }
+        const data = await response.json();
+        return data.quote;
+    } catch (error: any) {
+        if (error.message.includes('Authentication')) throw error;
+        throw new Error(`Could not retrieve quote for ${ticker}.`);
     }
-    if (error.statusCode === 401 || (error.message && (error.message.includes('HTTP 401') || error.message.includes('forbidden')))) {
-        throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
-    }
-    throw new Error(`Could not retrieve quote for ${ticker}.`);
-  }
 }
 
 function formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return date.toISOString().split('T')[0];
 }
 
 /**
@@ -49,28 +81,32 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
 
-    try {
-        const barsGenerator = alpaca.getBarsV2(ticker, {
-            start: formatDate(startDate),
-            end: formatDate(endDate),
-            timeframe: '1Day',
-            adjustment: 'split'
-        });
+    const params = new URLSearchParams({
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        timeframe: '1Day',
+        adjustment: 'split',
+        limit: '1000', // Max limit to ensure we get all days
+    });
 
-        const bars: Bar[] = [];
-        for await (const bar of barsGenerator) {
-            bars.push(bar);
+    const url = `${ALPACA_DATA_URL}/stocks/${ticker}/bars?${params.toString()}`;
+    const options = {
+        method: 'GET',
+        headers: {
+            'APCA-API-KEY-ID': ALPACA_API_KEY!,
+            'APCA-API-SECRET-KEY': ALPACA_API_SECRET!,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            await handleAlpacaError(response, ticker);
         }
-        return bars;
-        
+        const data = await response.json();
+        return data.bars;
     } catch (error: any) {
-        console.error(`Error fetching historical bars for ${ticker} from Alpaca:`, error);
-        if (error.statusCode === 404 || (error.message && error.message.includes('HTTP 404'))) {
-            throw new Error(`Ticker symbol '${ticker}' not found.`);
-        }
-        if (error.statusCode === 401 || (error.message && (error.message.includes('HTTP 401') || error.message.includes('forbidden')))) {
-            throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
-        }
+        if (error.message.includes('Authentication')) throw error;
         throw new Error(`Could not retrieve historical data for ${ticker}.`);
     }
 }

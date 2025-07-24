@@ -1,5 +1,5 @@
 
-import type { Bar } from '@alpacahq/alpaca-trade-api';
+import type { Bar } from '@/services/alpaca';
 
 // Type definitions for the statistics object
 export interface ConsecutiveGainLossStreak {
@@ -62,10 +62,10 @@ export function calculateHistoricalStatistics(bars: Bar[]): HistoricalContext {
 function calculateConsecutiveGainLossStreak(bars: Bar[]): ConsecutiveGainLossStreak {
   let streak = 0;
   const lastBar = bars[bars.length - 1];
-  const direction = lastBar.ClosePrice > lastBar.OpenPrice ? 'gain' : 'loss';
+  const direction = lastBar.c > lastBar.o ? 'gain' : 'loss';
 
   for (let i = bars.length - 1; i >= 0; i--) {
-    const currentDirection = bars[i].ClosePrice > bars[i].OpenPrice ? 'gain' : 'loss';
+    const currentDirection = bars[i].c > bars[i].o ? 'gain' : 'loss';
     if (currentDirection === direction) {
       streak++;
     } else {
@@ -76,11 +76,11 @@ function calculateConsecutiveGainLossStreak(bars: Bar[]): ConsecutiveGainLossStr
 }
 
 function calculateRecentPerformance(bars: Bar[]): RecentPerformance {
-  const lastClose = bars[bars.length - 1].ClosePrice;
+  const lastClose = bars[bars.length - 1].c;
   
   const getChange = (daysAgo: number) => {
     if (bars.length > daysAgo) {
-      const pastClose = bars[bars.length - 1 - daysAgo].ClosePrice;
+      const pastClose = bars[bars.length - 1 - daysAgo].c;
       return (lastClose - pastClose) / pastClose;
     }
     return 0;
@@ -98,9 +98,9 @@ function calculateAverageTrueRange(bars: Bar[], period: number): number {
   
   let trueRanges = [];
   for (let i = 1; i < bars.length; i++) {
-    const high = bars[i].HighPrice;
-    const low = bars[i].LowPrice;
-    const prevClose = bars[i - 1].ClosePrice;
+    const high = bars[i].h;
+    const low = bars[i].l;
+    const prevClose = bars[i - 1].c;
     
     const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
     trueRanges.push(tr);
@@ -116,9 +116,9 @@ function calculate52WeekPricePosition(bars: Bar[]): PricePosition52w {
         return { high: 0, low: 0, position: 0 };
     }
 
-    const high = Math.max(...bars.map(b => b.HighPrice));
-    const low = Math.min(...bars.map(b => b.LowPrice));
-    const currentPrice = bars[bars.length - 1].ClosePrice;
+    const high = Math.max(...bars.map(b => b.h));
+    const low = Math.min(...bars.map(b => b.l));
+    const currentPrice = bars[bars.length - 1].c;
     
     const position = (high - low) > 0 ? (currentPrice - low) / (high - low) : 0.5;
 
@@ -132,14 +132,14 @@ function calculateDayOfWeekPerformance(bars: Bar[]): DayOfWeekPerformance[] {
 
     for (const bar of bars) {
         // Timestamps from Alpaca are UTC. We create a date object assuming it's in a consistent timezone.
-        const date = new Date(bar.Timestamp);
+        const date = new Date(bar.t);
         const dayOfWeek = dayNames[date.getUTCDay()];
 
         if (!performance[dayOfWeek]) {
             performance[dayOfWeek] = { gains: [], losses: [], wins: 0, total: 0 };
         }
 
-        const dailyChange = (bar.ClosePrice - bar.OpenPrice) / bar.OpenPrice;
+        const dailyChange = (bar.c - bar.o) / bar.o;
         performance[dayOfWeek].total++;
         if (dailyChange > 0) {
             performance[dayOfWeek].gains.push(dailyChange);

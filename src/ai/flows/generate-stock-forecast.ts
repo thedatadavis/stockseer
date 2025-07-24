@@ -14,40 +14,24 @@ import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/sta
 
 function getNextFiveBusinessDays(): Date[] {
     const dates: Date[] = [];
-    const etTimeZone = 'America/New_York';
+    const today = new Date();
     
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: etTimeZone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: false,
-    });
+    // Start with today, but adjust if it's a weekend or after 4 PM ET
+    let currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
-    const parts = formatter.formatToParts(now);
-    const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
-    
-    let currentDate = new Date(Date.UTC(getPart('year'), getPart('month') - 1, getPart('day')));
-    const currentHour = getPart('hour');
-    const dayOfWeek = currentDate.getUTCDay();
-
-    // If it's after 4 PM ET on a weekday, or if it's a weekend, advance to the next business day.
-    if ((dayOfWeek >= 1 && dayOfWeek <= 5 && currentHour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
-        currentDate.setUTCDate(currentDate.getUTCDate() + (dayOfWeek === 5 || dayOfWeek === 6 ? 3 : 1));
-        if (dayOfWeek === 6) { // Saturday
-            currentDate.setUTCDate(currentDate.getUTCDate() -1); // Move to Monday from Saturday
-        }
+    // Simple check: if it's Saturday (6) or Sunday (0), move to next Monday.
+    if (currentDate.getDay() === 6) {
+        currentDate.setDate(currentDate.getDate() + 2);
+    } else if (currentDate.getDay() === 0) {
+        currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     while (dates.length < 5) {
-        const currentDayOfWeek = currentDate.getUTCDay();
-        if (currentDayOfWeek !== 0 && currentDayOfWeek !== 6) {
+        const dayOfWeek = currentDate.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday and Saturday
             dates.push(new Date(currentDate.getTime()));
         }
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        currentDate.setDate(currentDate.getDate() + 1);
     }
     
     return dates;
@@ -145,7 +129,7 @@ const generateStockForecastFlow = ai.defineFlow(
   },
   async ({ ticker }) => {
     const quote = await getLatestQuote(ticker);
-    const currentPrice = quote.AskPrice;
+    const currentPrice = quote.ap; // Ask Price from quote
     
     const historicalBars = await getHistoricalBars(ticker, 60);
     const historicalContext = calculateHistoricalStatistics(historicalBars);
