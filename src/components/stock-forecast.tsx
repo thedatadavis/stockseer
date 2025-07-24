@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useFormState } from 'react-dom';
+import { useFormState, useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -49,9 +49,19 @@ const initialState: ForecastState = {
   ticker: null,
 };
 
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} className="w-full sm:w-auto">
+      {pending ? "Getting Forecast..." : "Get Forecast"}
+      <ArrowRight className="ml-2 h-4 w-4" />
+    </Button>
+  );
+}
+
 export function StockForecast() {
   const [state, formAction] = useFormState(getForecastAction, initialState);
-  const [isPending, setIsPending] = useState(false);
+  const { pending } = useFormStatus();
   const { toast } = useToast();
 
   const form = useForm<FormValues>({
@@ -69,19 +79,13 @@ export function StockForecast() {
         variant: "destructive",
       });
     }
-    setIsPending(false);
-    form.reset({ ticker: state.ticker || "" });
-  }, [state, toast, form]);
-
-  const onSubmit = (data: FormValues) => {
-    setIsPending(true);
-    const formData = new FormData();
-    formData.append('ticker', data.ticker);
-    formAction(formData);
-  };
+    if (!pending) {
+      form.reset({ ticker: state.ticker || "" });
+    }
+  }, [state, toast, form, pending]);
   
   const renderTable = () => {
-    if (isPending) {
+    if (pending) {
       return <ForecastTableSkeleton />;
     }
 
@@ -115,7 +119,7 @@ export function StockForecast() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col sm:flex-row items-start gap-4 mb-8">
+          <form action={formAction} className="flex flex-col sm:flex-row items-start gap-4 mb-8">
             <FormField
               control={form.control}
               name="ticker"
@@ -129,10 +133,7 @@ export function StockForecast() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-              {isPending ? "Getting Forecast..." : "Get Forecast"}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <SubmitButton />
           </form>
         </Form>
         
@@ -155,6 +156,7 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
         <TableRow>
           <TableHead>Date</TableHead>
           <TableHead className="text-right">Opening Price</TableHead>
+
           <TableHead className="text-right">Closing Price</TableHead>
           <TableHead className="text-right">Projected Gain/Loss</TableHead>
         </TableRow>
