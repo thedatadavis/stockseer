@@ -1,7 +1,5 @@
 
 "use server";
-import { config } from 'dotenv';
-config();
 
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET;
