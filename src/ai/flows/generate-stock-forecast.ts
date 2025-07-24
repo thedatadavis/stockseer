@@ -58,10 +58,9 @@ const getStockForecastTool = ai.defineTool(
         return newDate;
     };
     
-    // Get the current date in ET
     const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     
-    let currentDate = new Date(nowInET);
+    let currentDate = nowInET;
     const dayOfWeekET = nowInET.getDay();
     const hourET = nowInET.getHours();
 
@@ -80,8 +79,8 @@ const getStockForecastTool = ai.defineTool(
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01); // +/- 0.5% from last close
-        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1% from open
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01); 
+        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
         const projectedGainLoss = closingPrice - openingPrice;
 
         const year = currentDate.getFullYear();
