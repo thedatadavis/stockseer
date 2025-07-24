@@ -21,7 +21,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet"></link>
       </head>
       <body className="font-body antialiased" suppressHydrationWarning={true}>
-        <GoogleAnalytics gaId="497989767" />
+        <GoogleAnalytics gaId="G-4PLQ1L6QT9" />
         {children}
         <Toaster />
       </body>
