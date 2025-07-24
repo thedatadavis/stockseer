@@ -127,7 +127,7 @@ export function StockForecast() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form action={formAction} className="flex flex-col sm:flex-row items-start gap-4 mb-8">
+          <form action={formAction} className="flex flex-col sm:flex-row items-end gap-4 mb-8">
             <FormField
               control={form.control}
               name="ticker"
