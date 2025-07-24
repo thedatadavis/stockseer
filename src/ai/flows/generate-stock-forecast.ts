@@ -48,51 +48,41 @@ const getStockForecastTool = ai.defineTool(
 
     const getNextTradingDay = (date: Date): Date => {
       const newDate = new Date(date);
-      // Move to the next day
       newDate.setDate(newDate.getDate() + 1);
-      
-      // If Saturday, move to Monday
-      if (newDate.getDay() === 6) {
+      const day = newDate.getDay();
+      if (day === 6) { // Saturday
         newDate.setDate(newDate.getDate() + 2);
-      } 
-      // If Sunday, move to Monday
-      else if (newDate.getDay() === 0) {
+      } else if (day === 0) { // Sunday
         newDate.setDate(newDate.getDate() + 1);
       }
-      
       return newDate;
     };
-    
+
     // Get the current date in ET
     const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     
     // Determine the starting date for the forecast
-    let startDate = nowInET;
+    let currentDate = new Date(nowInET);
     const dayOfWeekET = nowInET.getDay(); // Sunday - Saturday : 0 - 6
     const hourET = nowInET.getHours();
 
-    // If it's a weekday after 4 PM ET, or if it's a weekend, start from the next day.
+    // If it's a weekday after 4 PM ET, or if it's a weekend, start forecast from the next trading day.
     if ((dayOfWeekET >= 1 && dayOfWeekET <= 5 && hourET >= 16) || dayOfWeekET === 6 || dayOfWeekET === 0) {
-      // It's a weekend or after-hours, so we're already looking at the next day's forecast
-    } else {
-      // It's a trading day before 4 PM, so we are forecasting for the current day.
-      // We decrement the date to make getNextTradingDay return today as the first day.
-      startDate.setDate(startDate.getDate() - 1);
+      currentDate = getNextTradingDay(nowInET);
     }
-    
-    // If today is Friday after 4 PM, getNextTradingDay will move to Saturday, then Monday.
-    if (dayOfWeekET === 5 && hourET >= 16) {
-        startDate.setDate(startDate.getDate() + 2);
-    } else if (dayOfWeekET === 6) { // If Saturday
-        startDate.setDate(startDate.getDate() + 1);
-    }
-    
+
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
-    let currentDate = startDate;
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        currentDate = getNextTradingDay(currentDate);
+        // If the loop starts on a non-trading day, advance it to the next trading day.
+        const day = currentDate.getDay();
+        if (day === 6) { // Saturday
+          currentDate.setDate(currentDate.getDate() + 2);
+        } else if (day === 0) { // Sunday
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
         const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1%
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.04); // +/- 2%
         const projectedGainLoss = closingPrice - openingPrice;
@@ -105,6 +95,7 @@ const getStockForecastTool = ai.defineTool(
         });
 
         lastClosingPrice = closingPrice;
+        currentDate = getNextTradingDay(currentDate);
     }
     
     return { forecast };
