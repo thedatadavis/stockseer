@@ -1,6 +1,9 @@
 
 "use server";
 
+import { config } from 'dotenv';
+config();
+
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET;
 const ALPACA_DATA_URL = "https://data.alpaca.markets/v2";
@@ -27,8 +30,11 @@ export interface Quote {
 }
 
 async function handleAlpacaError(response: Response, ticker: string) {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
         throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
+    }
+    if (response.status === 403) {
+        throw new Error(`Request for '${ticker}' was forbidden. This may be due to insufficient permissions for your API key. Please check your Alpaca account's data subscription plan.`);
     }
     if (response.status === 404) {
         throw new Error(`Ticker symbol '${ticker}' not found.`);
