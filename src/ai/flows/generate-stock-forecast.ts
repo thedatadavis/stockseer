@@ -1,28 +1,21 @@
+
 'use server';
 
 /**
- * @fileOverview Generates a 5-day stock forecast for a given ticker symbol.
- *
- * This version refactors date generation into a dedicated utility for reliability.
- *
- * - getNextFiveBusinessDays - A utility to get an array of the next 5 business days.
- * - generateStockForecast - The main function that handles the stock forecast generation.
+ * @fileOverview Generates a 5-day stock forecast for a given ticker symbol,
+ * enriched with historical context and statistical analysis.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { getLatestQuote } from '@/services/alpaca';
+import { getLatestQuote, getHistoricalBars } from '@/services/alpaca';
+import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/statistics';
 
-/**
- * Utility function to get an array of the next 5 business days.
- * It correctly handles weekends and market close times.
- * @returns {Date[]} An array of 5 Date objects.
- */
+
 function getNextFiveBusinessDays(): Date[] {
     const dates: Date[] = [];
     const etTimeZone = 'America/New_York';
-
-    // Get the current date and time parts in the US Eastern timezone.
+    
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: etTimeZone,
@@ -30,37 +23,25 @@ function getNextFiveBusinessDays(): Date[] {
         month: 'numeric',
         day: 'numeric',
         hour: 'numeric',
+        minute: 'numeric',
         hour12: false,
     });
     
     const parts = formatter.formatToParts(now);
     const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
     
-    const year = getPart('year');
-    const month = getPart('month') - 1; // month is 0-indexed in JS Date
-    const day = getPart('day');
-    const hour = getPart('hour');
-    
-    // Construct a date that represents the current day in ET.
-    // Use UTC functions to avoid local timezone interference.
-    let currentDate = new Date(Date.UTC(year, month, day));
-    
-    const dayOfWeek = currentDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
+    let currentDate = new Date(Date.UTC(getPart('year'), getPart('month') - 1, getPart('day')));
+    const currentHour = getPart('hour');
+    const dayOfWeek = currentDate.getUTCDay();
 
     // If it's after 4 PM ET on a weekday, or if it's a weekend, advance to the next business day.
-    if ((dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
-        // Advance to the next day
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-        // Skip weekend
-        if (currentDate.getUTCDay() === 6) { // If it's now Saturday...
-            currentDate.setUTCDate(currentDate.getUTCDate() + 2); // ...move to Monday.
-        }
-        if (currentDate.getUTCDay() === 0) { // If it's now Sunday...
-            currentDate.setUTCDate(currentDate.getUTCDate() + 1); // ...move to Monday.
+    if ((dayOfWeek >= 1 && dayOfWeek <= 5 && currentHour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
+        currentDate.setUTCDate(currentDate.getUTCDate() + (dayOfWeek === 5 || dayOfWeek === 6 ? 3 : 1));
+        if (dayOfWeek === 6) { // Saturday
+            currentDate.setUTCDate(currentDate.getUTCDate() -1); // Move to Monday from Saturday
         }
     }
     
-    // Loop until we have 5 business days
     while (dates.length < 5) {
         const currentDayOfWeek = currentDate.getUTCDay();
         if (currentDayOfWeek !== 0 && currentDayOfWeek !== 6) {
@@ -71,7 +52,6 @@ function getNextFiveBusinessDays(): Date[] {
     
     return dates;
 }
-
 
 const GenerateStockForecastInputSchema = z.object({
   ticker: z.string().describe('The stock ticker symbol (e.g., AAPL, MSFT, GOOGL).'),
@@ -90,6 +70,31 @@ const GenerateStockForecastOutputSchema = z.object({
 });
 export type GenerateStockForecastOutput = z.infer<typeof GenerateStockForecastOutputSchema>;
 
+const HistoricalContextSchema = z.object({
+    consecutiveGainLossStreak: z.object({
+        direction: z.enum(['gain', 'loss']),
+        days: z.number()
+    }),
+    recentPerformance: z.object({
+        change_1d: z.number(),
+        change_5d: z.number(),
+        change_30d: z.number()
+    }),
+    averageTrueRange_14d: z.number(),
+    pricePosition_52w: z.object({
+        high: z.number(),
+        low: z.number(),
+        position: z.number()
+    }),
+    dayOfWeekPerformance: z.array(z.object({
+        day: z.string(),
+        avgGain: z.number(),
+        avgLoss: z.number(),
+        winRate: z.number()
+    }))
+}).optional().describe('Calculated historical statistics to improve forecast accuracy.');
+
+
 export async function generateStockForecast(input: GenerateStockForecastInput): Promise<GenerateStockForecastOutput> {
   return generateStockForecastFlow(input);
 }
@@ -102,22 +107,33 @@ const forecastPrompt = ai.definePrompt({
         ticker: z.string(),
         currentPrice: z.number(),
         dates: z.array(z.string()),
+        historicalContext: HistoricalContextSchema,
       }),
     },
     output: { schema: GenerateStockForecastOutputSchema },
-    prompt: `You are a financial analyst AI. Your task is to generate a 5-day stock forecast for the given ticker symbol.
+    prompt: `You are a sophisticated financial analyst AI. Your task is to provide a 5-day stock forecast.
 
-Current Ticker: {{{ticker}}}
-Current Price: {{{currentPrice}}}
-Forecast for the next 5 trading days:
+You have been provided with the current price and a set of key historical statistics for the stock: {{{ticker}}}.
+
+- Current Price: \${{{currentPrice}}}
+- Consecutive Up/Down Days: {{{historicalContext.consecutiveGainLossStreak.days}}} days of {{{historicalContext.consecutiveGainLossStreak.direction}}}
+- Recent Performance: 1-day: {{#if (gt historicalContext.recentPerformance.change_1d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_1d}}}, 5-day: {{#if (gt historicalContext.recentPerformance.change_5d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_5d}}}, 30-day: {{#if (gt historicalContext.recentPerformance.change_30d 0)}}+{{/if}}{{{displayPercent historicalContext.recentPerformance.change_30d}}}
+- 14-Day Average Volatility (ATR): \${{{toFixed historicalContext.averageTrueRange_14d 2}}}
+- Position in 52-Week Range: Currently at {{{displayPercent historicalContext.pricePosition_52w.position}}} (Low: \${{{historicalContext.pricePosition_52w.low}}}, High: \${{{historicalContext.pricePosition_52w.high}}})
+- Day-of-Week Tendencies:
+{{#each historicalContext.dayOfWeekPerformance}}
+  - {{this.day}}: Tends to gain {{displayPercent this.avgGain}} vs lose {{displayPercent this.avgLoss}}, with a {{displayPercent this.winRate}} win rate.
+{{/each}}
+- Forecast for the next 5 trading days:
 {{#each dates}}
 - {{this}}
 {{/each}}
 
+Use this historical context to generate a realistic but fictional 5-day forecast. Your analysis should be heavily influenced by these historical patterns. For example, if a stock has a strong tendency to perform well on Mondays, this should be reflected in your projection for the upcoming Monday.
+
 Generate a JSON object that conforms to the output schema.
 For each day, provide a projected opening price, closing price, and the projected gain or loss (closing - opening).
-Base your forecast on the current price and general market trends. The forecast should be realistic but fictional.
-Ensure the 'projectedGainLoss' is correctly calculated as the closing price minus the opening price for each respective day.
+Ensure the 'projectedGainLoss' is correctly calculated.
 Ensure the forecast array in the JSON output contains exactly 5 days. Do not include logs in the output.`,
   });
   
@@ -130,6 +146,9 @@ const generateStockForecastFlow = ai.defineFlow(
   async ({ ticker }) => {
     const quote = await getLatestQuote(ticker);
     const currentPrice = quote.AskPrice;
+    
+    const historicalBars = await getHistoricalBars(ticker, 60);
+    const historicalContext = calculateHistoricalStatistics(historicalBars);
 
     const forecastDates = getNextFiveBusinessDays();
     const formattedDates = forecastDates.map(d => d.toISOString().split('T')[0]);
@@ -138,14 +157,38 @@ const generateStockForecastFlow = ai.defineFlow(
       ticker,
       currentPrice,
       dates: formattedDates,
+      historicalContext,
     });
     
     if (!output) {
       throw new Error("Failed to get forecast from AI.");
     }
+
+    // Ensure projectedGainLoss is correctly calculated as a fallback
+    const validatedForecast = output.forecast.map(day => ({
+        ...day,
+        projectedGainLoss: day.closingPrice - day.openingPrice,
+    }));
     
     return {
-        forecast: output.forecast,
+        forecast: validatedForecast,
     };
   }
 );
+
+// Register Handlebars helpers
+import Handlebars from 'handlebars';
+
+Handlebars.registerHelper('displayPercent', function (value) {
+  if (typeof value !== 'number') return 'N/A';
+  return `${(value * 100).toFixed(2)}%`;
+});
+
+Handlebars.registerHelper('toFixed', function (value, digits) {
+    if (typeof value !== 'number') return 'N/A';
+    return value.toFixed(digits);
+});
+
+Handlebars.registerHelper('gt', function (a, b) {
+    return a > b;
+});
