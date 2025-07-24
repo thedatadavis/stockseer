@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -63,7 +63,6 @@ export function StockForecast() {
   const [state, formAction] = useActionState(getForecastAction, initialState);
   const { pending } = useFormStatus();
   const { toast } = useToast();
-  const [clientForecast, setClientForecast] = useState<GenerateStockForecastOutput | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -80,65 +79,21 @@ export function StockForecast() {
         variant: "destructive",
       });
     }
-
-    if (state.ticker && !pending) {
+    if (state.ticker) {
       form.reset({ ticker: state.ticker || "" });
-      
-      // Generate mock forecast data on the client
-      const getNextWeekday = (date: Date) => {
-        const newDate = new Date(date);
-        newDate.setUTCDate(newDate.getUTCDate() + (newDate.getUTCDay() === 5 ? 3 : newDate.getUTCDay() === 6 ? 2 : 1));
-        return newDate;
-      };
-
-      const isMarketOpen = (now: Date) => {
-        const hours = now.getUTCHours();
-        const day = now.getUTCDay();
-        // Market is open 9:30 AM - 4 PM ET, rough approximation in UTC
-        return day >= 1 && day <= 5 && hours >= 13 && hours < 21;
-      };
-      
-      let startDate = new Date();
-      if (!isMarketOpen(startDate)) {
-          startDate = getNextWeekday(startDate);
-      }
-
-      const forecast = [];
-      let currentDate = new Date(startDate);
-
-      while (forecast.length < 5) {
-        const day = currentDate.getUTCDay();
-        if (day !== 0 && day !== 6) { // Skip weekends
-            const dateString = currentDate.toISOString().slice(0, 10);
-            const openingPrice = Math.random() * 100 + 100;
-            const closingPrice = openingPrice + (Math.random() * 10 - 5);
-            const projectedGainLoss = closingPrice - openingPrice;
-            forecast.push({
-                date: dateString,
-                openingPrice: parseFloat(openingPrice.toFixed(2)),
-                closingPrice: parseFloat(closingPrice.toFixed(2)),
-                projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
-            });
-        }
-        currentDate = getNextWeekday(currentDate);
-      }
-      setClientForecast({ forecast });
-
-    } else if (!state.ticker) {
-      setClientForecast(null);
     }
-  }, [state, toast, form, pending]);
+  }, [state, toast, form]);
   
   const renderTable = () => {
     if (pending) {
       return <ForecastTableSkeleton />;
     }
 
-    if (clientForecast) {
+    if (state.forecast) {
       return (
         <div className="animate-in fade-in-50 duration-500">
           <h2 className="text-2xl font-bold mb-4 font-headline">5-Day Forecast for {state.ticker}</h2>
-          <ForecastTable forecastData={clientForecast} />
+          <ForecastTable forecastData={state.forecast} />
         </div>
       );
     }
@@ -196,14 +151,10 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
   }
 
   const formatDate = (dateString: string) => {
-    // When constructing a date from a YYYY-MM-DD string, it's treated as UTC.
-    // To display it correctly in the user's local timezone's calendar date,
-    // we need to account for the timezone offset.
-    const date = new Date(dateString);
-    const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-    const dateInUserTz = new Date(date.getTime() + userTimezoneOffset);
-    
-    return dateInUserTz.toLocaleDateString('en-US', {
+    // YYYY-MM-DD is treated as UTC by new Date().
+    const date = new Date(dateString + 'T00:00:00Z');
+    return date.toLocaleDateString('en-US', {
+      timeZone: 'UTC', // Display in UTC to match the input
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -216,7 +167,6 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
         <TableRow>
           <TableHead>Date</TableHead>
           <TableHead className="text-right">Opening Price</TableHead>
-
           <TableHead className="text-right">Closing Price</TableHead>
           <TableHead className="text-right">Projected Gain/Loss</TableHead>
         </TableRow>

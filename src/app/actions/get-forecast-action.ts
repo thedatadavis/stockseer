@@ -3,6 +3,7 @@
 import { z } from "zod";
 import {
   generateStockForecast,
+  type GenerateStockForecastInput,
   type GenerateStockForecastOutput,
 } from "@/ai/flows/generate-stock-forecast";
 
@@ -43,9 +44,10 @@ export async function getForecastAction(
     };
   } catch (error) {
     console.error(error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     return {
       forecast: null,
-      message: `Failed to fetch forecast for ${ticker}. Please check the ticker symbol and try again.`,
+      message: `Failed to fetch forecast for ${ticker}. ${errorMessage}`,
       ticker: ticker,
     };
   }

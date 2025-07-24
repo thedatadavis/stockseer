@@ -10,9 +10,11 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { getLatestQuote } from '@/services/alpaca';
 
 const GenerateStockForecastInputSchema = z.object({
   ticker: z.string().describe('The stock ticker symbol (e.g., AAPL, MSFT, GOOGL).'),
+  currentPrice: z.number().optional().describe('The current price of the stock.'),
 });
 export type GenerateStockForecastInput = z.infer<typeof GenerateStockForecastInputSchema>;
 
@@ -32,31 +34,64 @@ export async function generateStockForecast(input: GenerateStockForecastInput): 
   return generateStockForecastFlow(input);
 }
 
-const getStockForecast = ai.defineTool(
+const getStockForecastTool = ai.defineTool(
   {
     name: 'getStockForecast',
     description: 'Returns a 5-day stock forecast, including projected daily gains/losses for a given stock ticker.',
     inputSchema: GenerateStockForecastInputSchema,
     outputSchema: GenerateStockForecastOutputSchema,
   },
-  async (input) => {
-    // This is a placeholder implementation.
-    // In a real application, this would call an external API or service to get the stock forecast.
-    // The client will generate mock data.
-    return {
-      forecast: [],
+  async ({ ticker, currentPrice }) => {
+    if (currentPrice === undefined) {
+      throw new Error('Current price is required to generate a forecast.');
+    }
+
+    // AI will generate a forecast based on the current price.
+    // This is a placeholder for where a more sophisticated forecasting model could be used.
+    // For now, we ask the AI to generate plausible-looking data.
+
+    const getNextWeekday = (date: Date): Date => {
+      const newDate = new Date(date);
+      newDate.setUTCDate(newDate.getUTCDate() + (newDate.getUTCDay() === 5 ? 3 : newDate.getUTCDay() === 6 ? 2 : 1));
+      return newDate;
     };
+
+    const forecast: z.infer<typeof ForecastDaySchema>[] = [];
+    let currentDate = getNextWeekday(new Date()); 
+    let lastClosingPrice = currentPrice;
+
+    for (let i = 0; i < 5; i++) {
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1%
+        const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.04); // +/- 2%
+        const projectedGainLoss = closingPrice - openingPrice;
+        
+        forecast.push({
+            date: currentDate.toISOString().slice(0, 10),
+            openingPrice: parseFloat(openingPrice.toFixed(2)),
+            closingPrice: parseFloat(closingPrice.toFixed(2)),
+            projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
+        });
+
+        lastClosingPrice = closingPrice;
+        currentDate = getNextWeekday(currentDate);
+    }
+    
+    return { forecast };
   }
 );
 
+
 const generateStockForecastPrompt = ai.definePrompt({
   name: 'generateStockForecastPrompt',
-  tools: [getStockForecast],
+  tools: [getStockForecastTool],
   input: {schema: GenerateStockForecastInputSchema},
   output: {schema: GenerateStockForecastOutputSchema},
-  prompt: `You are a financial analyst. The user will provide you with a stock ticker, and you will provide a 5-day forecast using the getStockForecast tool.
+  prompt: `You are a financial analyst. The user will provide you with a stock ticker.
+  Your task is to provide a 5-day forecast.
+  Use the getStockForecast tool to get the forecast.
 
-  The ticker the user is asking about is: {{{ticker}}}`,
+  The user is asking about: {{{ticker}}}
+  The current price is: {{{currentPrice}}}`,
 });
 
 const generateStockForecastFlow = ai.defineFlow(
@@ -65,8 +100,13 @@ const generateStockForecastFlow = ai.defineFlow(
     inputSchema: GenerateStockForecastInputSchema,
     outputSchema: GenerateStockForecastOutputSchema,
   },
-  async input => {
-    const {output} = await generateStockForecastPrompt(input);
+  async ({ ticker }) => {
+    const quote = await getLatestQuote(ticker);
+    if (!quote) {
+      throw new Error(`Could not retrieve quote for ${ticker}`);
+    }
+
+    const {output} = await generateStockForecastPrompt({ ticker, currentPrice: quote.AskPrice });
     return output!;
   }
 );
