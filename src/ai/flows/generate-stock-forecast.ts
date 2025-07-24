@@ -75,7 +75,7 @@ const getStockForecastTool = ai.defineTool(
     let lastClosingPrice = currentPrice;
 
     for (let i = 0; i < 5; i++) {
-        // If the loop starts on a non-trading day, advance it to the next trading day.
+        // If the current date is a weekend, advance it to the next trading day. This handles the initial start date.
         const day = currentDate.getDay();
         if (day === 6) { // Saturday
           currentDate.setDate(currentDate.getDate() + 2);
@@ -87,8 +87,14 @@ const getStockForecastTool = ai.defineTool(
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02); // +/- 1% from open
         const projectedGainLoss = closingPrice - openingPrice;
         
+        // Format date robustly to YYYY-MM-DD
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(currentDate.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${dayOfMonth}`;
+
         forecast.push({
-            date: currentDate.toISOString().slice(0, 10),
+            date: formattedDate,
             openingPrice: parseFloat(openingPrice.toFixed(2)),
             closingPrice: parseFloat(closingPrice.toFixed(2)),
             projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
