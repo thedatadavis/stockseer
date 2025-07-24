@@ -152,13 +152,14 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
   }
 
   const formatDate = (dateString: string) => {
-    // Appending 'T00:00:00Z' treats the date string as UTC.
-    const date = new Date(`${dateString}T00:00:00Z`);
+    const parts = dateString.split('-').map(part => parseInt(part, 10));
+    // Note: months are 0-indexed in JavaScript Date
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC', // Display in UTC to match the input
+      timeZone: 'UTC',
     });
   };
 
