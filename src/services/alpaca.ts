@@ -35,7 +35,7 @@ async function handleAlpacaError(response: Response, ticker: string) {
     }
     const errorBody = await response.text();
     console.error(`Error fetching from Alpaca for ${ticker}:`, response.status, errorBody);
-    throw new Error(`Could not retrieve data for ${ticker}. Status: ${response.status}`);
+    throw new Error(`Could not retrieve data for ${ticker}. Status: ${response.status}. Body: ${errorBody}`);
 }
 
 /**
@@ -61,8 +61,7 @@ export async function getLatestQuote(ticker: string): Promise<Quote> {
         const data = await response.json();
         return data.quote;
     } catch (error: any) {
-        if (error.message.includes('Authentication')) throw error;
-        throw new Error(`Could not retrieve quote for ${ticker}.`);
+        throw new Error(`Failed to get latest quote for ${ticker}: ${error.message}`);
     }
 }
 
@@ -102,7 +101,6 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
         const data = await response.json();
         return data.bars;
     } catch (error: any) {
-        if (error.message.includes('Authentication')) throw error;
-        throw new Error(`Could not retrieve historical data for ${ticker}.`);
+        throw new Error(`Failed to get historical bars for ${ticker}: ${error.message}`);
     }
 }
