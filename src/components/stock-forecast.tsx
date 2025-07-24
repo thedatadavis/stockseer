@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useActionState } from 'react';
+import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getForecastAction, type ForecastState } from '@/app/actions/get-forecast-action';
+import { useEffect } from 'react';
 
 const formSchema = z.object({
   ticker: z.string().min(1, 'Ticker is required').max(10, 'Ticker is too long').toUpperCase(),
@@ -150,6 +151,20 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
   }
 
+  const formatDate = (dateString: string) => {
+    // Dates from the server are YYYY-MM-DD.
+    // new Date('YYYY-MM-DD') creates a date at midnight UTC.
+    // To prevent timezone conversion issues where the date could be off by one day,
+    // we explicitly tell it to use the UTC timezone.
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+  };
+
   return (
     <Table>
       <TableHeader>
@@ -164,7 +179,7 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
       <TableBody>
         {forecastData.forecast.map((day) => (
           <TableRow key={day.date}>
-            <TableCell className="font-medium">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</TableCell>
+            <TableCell className="font-medium">{formatDate(day.date)}</TableCell>
             <TableCell className="text-right">{formatCurrency(day.openingPrice)}</TableCell>
             <TableCell className="text-right">{formatCurrency(day.closingPrice)}</TableCell>
             <TableCell
