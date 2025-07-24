@@ -1,5 +1,5 @@
 
-import type { Bar } from '@alpacahq/alpaca-trade-api/dist/resources/datav2/entityv2';
+import type { Bar } from '@alpacahq/alpaca-trade-api';
 
 // Type definitions for the statistics object
 export interface ConsecutiveGainLossStreak {

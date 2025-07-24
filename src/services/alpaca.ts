@@ -2,7 +2,7 @@
 "use server";
 
 import Alpaca from '@alpacahq/alpaca-trade-api';
-import { type Bar } from '@alpacahq/alpaca-trade-api/dist/resources/datav2/entityv2';
+import { type Bar } from '@alpacahq/alpaca-trade-api';
 
 const alpaca = new Alpaca({
   keyId: process.env.ALPACA_API_KEY,
