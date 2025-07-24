@@ -25,8 +25,8 @@ export async function getLatestQuote(ticker: string) {
         if (error.message.includes('HTTP 404')) {
             throw new Error(`Ticker symbol '${ticker}' not found.`);
         }
-        if (error.message.includes('HTTP 401')) {
-            throw new Error('Authentication with Alpaca failed. Please check your API keys.');
+        if (error.message.includes('HTTP 401') || error.message.includes('forbidden')) {
+            throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
         }
     }
     throw new Error(`Could not retrieve quote for ${ticker}.`);
@@ -60,8 +60,13 @@ export async function getHistoricalBars(ticker: string, days: number): Promise<B
         
     } catch (error) {
         console.error(`Error fetching historical bars for ${ticker} from Alpaca:`, error);
-        if (error instanceof Error && error.message.includes('HTTP 404')) {
-            throw new Error(`Ticker symbol '${ticker}' not found.`);
+        if (error instanceof Error) {
+            if (error.message.includes('HTTP 404')) {
+                throw new Error(`Ticker symbol '${ticker}' not found.`);
+            }
+            if (error.message.includes('HTTP 401') || error.message.includes('forbidden')) {
+                throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
+            }
         }
         throw new Error(`Could not retrieve historical data for ${ticker}.`);
     }
