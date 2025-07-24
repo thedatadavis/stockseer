@@ -42,24 +42,54 @@ const getStockForecast = ai.defineTool(
   async (input) => {
     // This is a placeholder implementation.
     // In a real application, this would call an external API or service to get the stock forecast.
-    // For now, we return some dummy data.
-    const today = new Date();
-    const forecast = [];
-    for (let i = 1; i <= 5; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dateString = date.toISOString().slice(0, 10);
-      const openingPrice = Math.random() * 100 + 100; // Random price between 100 and 200
-      const closingPrice = openingPrice + (Math.random() * 10 - 5); // Opening price plus or minus a random value between -5 and 5
-      const projectedGainLoss = closingPrice - openingPrice;
-      forecast.push({
-        date: dateString,
-        openingPrice: parseFloat(openingPrice.toFixed(2)),
-        closingPrice: parseFloat(closingPrice.toFixed(2)),
-        projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
-      });
+    
+    const getNextWeekday = (date: Date) => {
+        const newDate = new Date(date);
+        const day = newDate.getDay();
+        if (day === 5 /* Friday */) {
+            newDate.setDate(newDate.getDate() + 3);
+        } else if (day === 6 /* Saturday */) {
+            newDate.setDate(newDate.getDate() + 2);
+        } else {
+            newDate.setDate(newDate.getDate() + 1);
+        }
+        return newDate;
+    };
+
+    const isMarketOpen = (now: Date) => {
+        const hours = now.getHours();
+        const day = now.getDay();
+        // Market is open 9:30 AM - 4 PM ET on weekdays
+        return day >= 1 && day <= 5 && hours >= 9 && hours < 16;
+    };
+
+    let startDate = new Date();
+    // If market is closed, start from the next day.
+    if (!isMarketOpen(startDate)) {
+        startDate.setDate(startDate.getDate() + 1);
     }
 
+    const forecast = [];
+    let currentDate = new Date(startDate);
+
+    while (forecast.length < 5) {
+        const day = currentDate.getDay();
+        // Skip weekends
+        if (day !== 0 && day !== 6) {
+            const dateString = currentDate.toISOString().slice(0, 10);
+            const openingPrice = Math.random() * 100 + 100; // Random price between 100 and 200
+            const closingPrice = openingPrice + (Math.random() * 10 - 5); // Opening price plus or minus a random value between -5 and 5
+            const projectedGainLoss = closingPrice - openingPrice;
+            forecast.push({
+                date: dateString,
+                openingPrice: parseFloat(openingPrice.toFixed(2)),
+                closingPrice: parseFloat(closingPrice.toFixed(2)),
+                projectedGainLoss: parseFloat(projectedGainLoss.toFixed(2)),
+            });
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
     return {
       forecast: forecast,
     };
