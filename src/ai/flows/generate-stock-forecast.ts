@@ -84,7 +84,6 @@ function getNextFiveBusinessDays(logs: string[]): Date[] {
 
 const GenerateStockForecastInputSchema = z.object({
   ticker: z.string().describe('The stock ticker symbol (e.g., AAPL, MSFT, GOOGL).'),
-  currentPrice: z.number().optional().describe('The current price of the stock.'),
 });
 export type GenerateStockForecastInput = z.infer<typeof GenerateStockForecastInputSchema>;
 
@@ -92,7 +91,7 @@ const ForecastDaySchema = z.object({
   date: z.string().describe('The date of the forecast (YYYY-MM-DD).'),
   openingPrice: z.number().describe('The projected opening price for the day.'),
   closingPrice: z.number().describe('The projected closing price for the day.'),
-  projectedGainLoss: z.number().describe('The projected gain or loss for the day.'),
+  projectedGainLoss: z.number().describe('The projected gain or loss for the day, calculated as Closing Price - Opening Price.'),
 });
 
 const GenerateStockForecastOutputSchema = z.object({
@@ -105,7 +104,33 @@ export async function generateStockForecast(input: GenerateStockForecastInput): 
   return generateStockForecastFlow(input);
 }
 
-// This is a temporary debugging flow that ONLY returns dates and logs.
+
+const forecastPrompt = ai.definePrompt({
+    name: 'stockForecastPrompt',
+    input: {
+      schema: z.object({
+        ticker: z.string(),
+        currentPrice: z.number(),
+        dates: z.array(z.string()),
+      }),
+    },
+    output: { schema: GenerateStockForecastOutputSchema },
+    prompt: `You are a financial analyst AI. Your task is to generate a 5-day stock forecast for the given ticker symbol.
+
+Current Ticker: {{{ticker}}}
+Current Price: {{{currentPrice}}}
+Forecast for the next 5 trading days:
+{{#each dates}}
+- {{this}}
+{{/each}}
+
+Generate a JSON object that conforms to the output schema.
+For each day, provide a projected opening price, closing price, and the projected gain or loss (closing - opening).
+Base your forecast on the current price and general market trends. The forecast should be realistic but fictional.
+Ensure the 'projectedGainLoss' is correctly calculated as the closing price minus the opening price for each respective day.
+Ensure the forecast array in the JSON output contains exactly 5 days. Do not include logs in the output.`,
+  });
+  
 const generateStockForecastFlow = ai.defineFlow(
   {
     name: 'generateStockForecastFlow',
@@ -114,21 +139,33 @@ const generateStockForecastFlow = ai.defineFlow(
   },
   async ({ ticker }) => {
     const logs: string[] = [];
+    logs.push(`Starting forecast generation for ${ticker}`);
+
+    const quote = await getLatestQuote(ticker);
+    const currentPrice = quote.AskPrice;
+    logs.push(`Current price for ${ticker}: ${currentPrice}`);
+
     const forecastDates = getNextFiveBusinessDays(logs);
+    const formattedDates = forecastDates.map(d => d.toISOString().split('T')[0]);
+
+    logs.push(`Requesting AI forecast for dates: ${formattedDates.join(', ')}`);
+
+    const { output } = await forecastPrompt({
+      ticker,
+      currentPrice,
+      dates: formattedDates,
+    });
     
-    // Create dummy forecast data just to satisfy the schema.
-    // The key is that the dates are from our calculation.
-    const dummyForecast = forecastDates.map(date => ({
-        date: date.toISOString().split('T')[0],
-        openingPrice: 0,
-        closingPrice: 0,
-        projectedGainLoss: 0,
-    }));
+    if (!output) {
+      logs.push("Error: AI did not return a valid forecast.");
+      throw new Error("Failed to get forecast from AI.");
+    }
 
-    logs.push("DEBUG: Bypassing AI forecast generation. Returning only calculated dates.");
-
+    logs.push("Successfully generated AI forecast.");
+    
+    // Make sure the output from the AI has our logs attached.
     return {
-        forecast: dummyForecast,
+        forecast: output.forecast,
         logs: logs,
     };
   }

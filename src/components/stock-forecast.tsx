@@ -40,7 +40,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, TrendingUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowRight, TrendingUp, ChevronsUpDown, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getForecastAction, type ForecastState } from '@/app/actions/get-forecast-action';
 
@@ -61,7 +61,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-      {pending ? "Getting Dates..." : "Get Dates"}
+      {pending ? "Getting Forecast..." : "Get Forecast"}
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   );
@@ -97,18 +97,36 @@ export function StockForecast() {
       return <ForecastTableSkeleton />;
     }
 
-    // This is the new debug view. It just shows the dates.
     if (state.forecast) {
       return (
         <div className="animate-in fade-in-50 duration-500">
-          <h2 className="text-2xl font-bold mb-4 font-headline">Calculated Dates for {state.ticker}</h2>
-          <div className="p-4 bg-muted rounded-md">
-            <ul className="space-y-2">
-              {state.forecast.forecast.map(day => (
-                <li key={day.date} className="font-mono text-lg">{day.date}</li>
-              ))}
-            </ul>
-          </div>
+          <h2 className="text-2xl font-bold mb-4 font-headline">5-Day Forecast for {state.ticker}</h2>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Opening Price</TableHead>
+                        <TableHead className="text-right">Closing Price</TableHead>
+                        <TableHead className="text-right">Gain/Loss</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {state.forecast.forecast.map((day) => (
+                        <TableRow key={day.date}>
+                            <TableCell className="font-medium">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</TableCell>
+                            <TableCell className="text-right">${day.openingPrice.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">${day.closingPrice.toFixed(2)}</TableCell>
+                            <TableCell className={cn(
+                                "text-right flex items-center justify-end gap-2",
+                                day.projectedGainLoss >= 0 ? "text-green-600" : "text-red-600"
+                            )}>
+                                {day.projectedGainLoss >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                ${Math.abs(day.projectedGainLoss).toFixed(2)}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
         </div>
       );
     }
@@ -116,7 +134,7 @@ export function StockForecast() {
     return (
       <div className="text-center py-10">
         <TrendingUp className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">Ready to test the date logic?</h3>
+        <h3 className="mt-4 text-lg font-medium">Ready for your stock forecast?</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Enter a stock ticker above to get started.
         </p>
@@ -127,9 +145,9 @@ export function StockForecast() {
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
       <CardHeader>
-        <CardTitle>Get Stock Dates (Debug Mode)</CardTitle>
+        <CardTitle>AI Stock Forecast</CardTitle>
         <CardDescription>
-          This is a debug view to test the date calculation logic from the server.
+          Get a 5-day AI-powered stock forecast.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -158,7 +176,7 @@ export function StockForecast() {
       </CardContent>
       {state.logs && state.logs.length > 0 && (
         <CardFooter>
-            <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+            <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="item-1">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
@@ -185,11 +203,26 @@ function ForecastTableSkeleton() {
   return (
     <div className="space-y-4">
       <Skeleton className="h-8 w-1/2 mb-4" />
-      <div className="p-4 bg-muted rounded-md space-y-2">
-        {Array.from({ length: 5 }).map((_, index) => (
-           <Skeleton key={index} className="h-7 w-32" />
-        ))}
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead><Skeleton className="h-6 w-24" /></TableHead>
+            <TableHead className="text-right"><Skeleton className="h-6 w-32" /></TableHead>
+            <TableHead className="text-right"><Skeleton className="h-6 w-32" /></TableHead>
+            <TableHead className="text-right"><Skeleton className="h-6 w-24" /></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <TableRow key={index}>
+              <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+              <TableCell className="text-right"><Skeleton className="h-6 w-32" /></TableCell>
+              <TableCell className="text-right"><Skeleton className="h-6 w-32" /></TableCell>
+              <TableCell className="text-right"><Skeleton className="h-6 w-24" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
