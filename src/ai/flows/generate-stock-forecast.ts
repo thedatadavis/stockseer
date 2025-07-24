@@ -27,6 +27,7 @@ const ForecastDaySchema = z.object({
 
 const GenerateStockForecastOutputSchema = z.object({
   forecast: z.array(ForecastDaySchema).describe('An array of 5-day stock forecast data.'),
+  logs: z.array(z.string()).optional().describe('An array of debug log messages.'),
 });
 export type GenerateStockForecastOutput = z.infer<typeof GenerateStockForecastOutputSchema>;
 
@@ -46,14 +47,10 @@ const getStockForecastTool = ai.defineTool(
       throw new Error('Current price is required to generate a forecast.');
     }
 
-    const getNextTradingDay = (date: Date): Date => {
-      const newDate = new Date(date);
-      newDate.setDate(newDate.getDate() + 1);
-      return newDate;
-    };
-    
+    const logs: string[] = [];
+
     const nowInET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    console.log('Initial time in ET:', nowInET.toString());
+    logs.push(`Initial time in ET: ${nowInET.toString()}`);
 
     let currentDate = new Date(nowInET);
     const dayOfWeekET = nowInET.getDay();
@@ -76,7 +73,7 @@ const getStockForecastTool = ai.defineTool(
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    console.log('Calculated forecast start date:', currentDate.toString());
+    logs.push(`Calculated forecast start date: ${currentDate.toString()}`);
 
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
@@ -90,7 +87,7 @@ const getStockForecastTool = ai.defineTool(
             dayOfWeek = forecastDate.getDay();
         }
 
-        console.log(`Loop ${i}: Processing date`, forecastDate.toString());
+        logs.push(`Loop ${i}: Processing date ${forecastDate.toString()}`);
 
         const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.5) * 0.01);
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
@@ -112,7 +109,7 @@ const getStockForecastTool = ai.defineTool(
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    return { forecast };
+    return { forecast, logs };
   }
 );
 

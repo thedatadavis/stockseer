@@ -15,6 +15,7 @@ export interface ForecastState {
   forecast: GenerateStockForecastOutput | null;
   message: string | null;
   ticker: string | null;
+  logs?: string[];
 }
 
 export async function getForecastAction(
@@ -41,6 +42,7 @@ export async function getForecastAction(
       forecast: result,
       message: null,
       ticker: ticker,
+      logs: result.logs,
     };
   } catch (error) {
     console.error(error);

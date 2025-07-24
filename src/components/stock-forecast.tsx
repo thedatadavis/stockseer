@@ -10,11 +10,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter
 } from "@/components/ui/card";
 import {
   Table,
@@ -33,7 +40,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, TrendingUp } from 'lucide-react';
+import { ArrowRight, TrendingUp, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getForecastAction, type ForecastState } from '@/app/actions/get-forecast-action';
 
@@ -47,6 +54,7 @@ const initialState: ForecastState = {
   forecast: null,
   message: null,
   ticker: null,
+  logs: [],
 };
 
 function SubmitButton() {
@@ -141,6 +149,27 @@ export function StockForecast() {
           {renderTable()}
         </div>
       </CardContent>
+      {state.logs && state.logs.length > 0 && (
+        <CardFooter>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="item-1">
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2">
+                    <ChevronsUpDown className="h-4 w-4" />
+                    Debug Logs
+                  </div>
+                  </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="mt-2 w-full rounded-md bg-slate-950 p-4">
+                    <code className="text-white">
+                      {state.logs.join('\n')}
+                    </code>
+                  </pre>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+        </CardFooter>
+      )}
     </Card>
   );
 }
