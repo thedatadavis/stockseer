@@ -15,62 +15,66 @@ import { getLatestQuote } from '@/services/alpaca';
 
 /**
  * Utility function to get an array of the next 5 business days.
- * It correctly handles timezones, weekends, and ensures dates are in the future.
+ * It correctly handles weekends and market close times.
  * @returns {Date[]} An array of 5 Date objects.
  */
 function getNextFiveBusinessDays(logs: string[]): Date[] {
-  const dates: Date[] = [];
-  
-  // 1. Get the current date and time in the US Eastern timezone.
-  const etTimeZone = 'America/New_York';
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: etTimeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-  });
+    const dates: Date[] = [];
+    const etTimeZone = 'America/New_York';
 
-  const parts = formatter.formatToParts(now);
-  const partValues: { [key: string]: string } = {};
-  for (const part of parts) {
-      partValues[part.type] = part.value;
-  }
-  
-  // 2. Create a reliable, timezone-neutral Date object using UTC.
-  // Always specify radix 10 to prevent parsing bugs.
-  const year = parseInt(partValues.year, 10);
-  const month = parseInt(partValues.month, 10) - 1; // Month is 0-indexed
-  const day = parseInt(partValues.day, 10);
-  const hour = parseInt(partValues.hour, 10);
-  
-  let currentDate = new Date(Date.UTC(year, month, day));
-  logs.push(`[Date Util] Current ET Date determined as: ${currentDate.toUTCString()}, Hour: ${hour}`);
-  
-  const dayOfWeek = currentDate.getUTCDay();
+    // Get the current date and time parts in the US Eastern timezone.
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: etTimeZone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        hour12: false,
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+    
+    const year = getPart('year');
+    const month = getPart('month') - 1; // month is 0-indexed in JS Date
+    const day = getPart('day');
+    const hour = getPart('hour');
+    
+    // Construct a date that represents the current day in ET.
+    // Use UTC functions to avoid local timezone interference.
+    let currentDate = new Date(Date.UTC(year, month, day));
+    logs.push(`[Date Util] Starting with ET date: ${currentDate.toUTCString()}`);
 
-  // 3. If it's after market close on a weekday, or a weekend, start from the next day.
-  if ((dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-      logs.push(`[Date Util] Market closed or weekend. Advancing to next day: ${currentDate.toUTCString()}`);
-  }
+    const dayOfWeek = currentDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
 
-  // 4. Loop until we have found 5 business days.
-  while (dates.length < 5) {
-    const currentDayOfWeek = currentDate.getUTCDay();
-    // Day 6 is Saturday, Day 0 is Sunday.
-    if (currentDayOfWeek !== 6 && currentDayOfWeek !== 0) {
-      // It's a business day, add a new Date object to the array.
-      dates.push(new Date(currentDate));
+    // If it's after 4 PM ET on a weekday, or if it's a weekend, advance to the next business day.
+    if ((dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
+        logs.push(`[Date Util] After hours or weekend. Advancing to next business day.`);
+        // Advance to the next day
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        // Skip weekend
+        if (currentDate.getUTCDay() === 6) { // If it's now Saturday...
+            currentDate.setUTCDate(currentDate.getUTCDate() + 2); // ...move to Monday.
+        }
+        if (currentDate.getUTCDay() === 0) { // If it's now Sunday...
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1); // ...move to Monday.
+        }
     }
-    // Advance to the next calendar day for the next check.
-    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-  }
-  
-  logs.push(`[Date Util] Found 5 business days: ${dates.map(d => d.toISOString().split('T')[0]).join(', ')}`);
-  return dates;
+    
+    logs.push(`[Date Util] First forecast day determined as: ${currentDate.toUTCString()}`);
+
+    // Loop until we have 5 business days
+    while (dates.length < 5) {
+        const currentDayOfWeek = currentDate.getUTCDay();
+        if (currentDayOfWeek !== 0 && currentDayOfWeek !== 6) {
+            dates.push(new Date(currentDate.getTime()));
+        }
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+    
+    logs.push(`[Date Util] Found 5 business days: ${dates.map(d => d.toISOString().split('T')[0]).join(', ')}`);
+    return dates;
 }
 
 
@@ -110,21 +114,16 @@ const getStockForecastTool = ai.defineTool(
     }
 
     const logs: string[] = [];
-
-    // Get the next 5 business days from our new utility function.
     const forecastDates = getNextFiveBusinessDays(logs);
 
     const forecast: z.infer<typeof ForecastDaySchema>[] = [];
     let lastClosingPrice = currentPrice;
 
-    // Iterate over the guaranteed correct dates.
     for (const date of forecastDates) {
-        // Simulate a small gap between previous close and new opening price
-        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.49) * 0.01); 
+        const openingPrice = lastClosingPrice * (1 + (Math.random() - 0.49) * 0.01);
         const closingPrice = openingPrice * (1 + (Math.random() - 0.5) * 0.02);
         const projectedGainLoss = closingPrice - openingPrice;
 
-        // Format the date to YYYY-MM-DD string.
         const formattedDate = date.toISOString().split('T')[0];
 
         forecast.push({
@@ -169,7 +168,6 @@ const generateStockForecastFlow = ai.defineFlow(
 
     const {output} = await generateStockForecastPrompt({ ticker, currentPrice: quote.AskPrice });
     
-    // The tool call now handles logging, so we can just return the output.
     return output!;
   }
 );
