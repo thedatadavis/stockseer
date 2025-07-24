@@ -1,5 +1,7 @@
 
 "use server";
+import { config } from 'dotenv';
+config();
 
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET;
@@ -27,7 +29,7 @@ export interface Quote {
 }
 
 async function handleAlpacaError(response: Response, ticker: string) {
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
         throw new Error('Authentication with Alpaca failed. Please check your API keys in the .env file.');
     }
     if (response.status === 404) {
