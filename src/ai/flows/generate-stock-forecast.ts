@@ -18,7 +18,7 @@ import { getLatestQuote } from '@/services/alpaca';
  * It correctly handles weekends and market close times.
  * @returns {Date[]} An array of 5 Date objects.
  */
-function getNextFiveBusinessDays(logs: string[]): Date[] {
+function getNextFiveBusinessDays(): Date[] {
     const dates: Date[] = [];
     const etTimeZone = 'America/New_York';
 
@@ -44,30 +44,22 @@ function getNextFiveBusinessDays(logs: string[]): Date[] {
     // Construct a date that represents the current day in ET.
     // Use UTC functions to avoid local timezone interference.
     let currentDate = new Date(Date.UTC(year, month, day));
-    logs.push(`[Date Util] Starting with ET date: ${currentDate.toUTCString()}`);
-    logs.push(`[Date Util] Current ET hour: ${hour}`);
-
-
+    
     const dayOfWeek = currentDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
 
     // If it's after 4 PM ET on a weekday, or if it's a weekend, advance to the next business day.
     if ((dayOfWeek >= 1 && dayOfWeek <= 5 && hour >= 16) || dayOfWeek === 6 || dayOfWeek === 0) {
-        logs.push(`[Date Util] After hours or weekend. Advancing to next business day.`);
         // Advance to the next day
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
         // Skip weekend
         if (currentDate.getUTCDay() === 6) { // If it's now Saturday...
             currentDate.setUTCDate(currentDate.getUTCDate() + 2); // ...move to Monday.
-            logs.push(`[Date Util] Advanced from Sat to Mon.`);
         }
         if (currentDate.getUTCDay() === 0) { // If it's now Sunday...
             currentDate.setUTCDate(currentDate.getUTCDate() + 1); // ...move to Monday.
-            logs.push(`[Date Util] Advanced from Sun to Mon.`);
         }
     }
     
-    logs.push(`[Date Util] First forecast day determined as: ${currentDate.toUTCString()}`);
-
     // Loop until we have 5 business days
     while (dates.length < 5) {
         const currentDayOfWeek = currentDate.getUTCDay();
@@ -77,7 +69,6 @@ function getNextFiveBusinessDays(logs: string[]): Date[] {
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
     
-    logs.push(`[Date Util] Found 5 business days: ${dates.map(d => d.toISOString().split('T')[0]).join(', ')}`);
     return dates;
 }
 
@@ -96,7 +87,6 @@ const ForecastDaySchema = z.object({
 
 const GenerateStockForecastOutputSchema = z.object({
   forecast: z.array(ForecastDaySchema).describe('An array of 5-day stock forecast data.'),
-  logs: z.array(z.string()).optional().describe('An array of debug log messages.'),
 });
 export type GenerateStockForecastOutput = z.infer<typeof GenerateStockForecastOutputSchema>;
 
@@ -138,17 +128,11 @@ const generateStockForecastFlow = ai.defineFlow(
     outputSchema: GenerateStockForecastOutputSchema,
   },
   async ({ ticker }) => {
-    const logs: string[] = [];
-    logs.push(`Starting forecast generation for ${ticker}`);
-
     const quote = await getLatestQuote(ticker);
     const currentPrice = quote.AskPrice;
-    logs.push(`Current price for ${ticker}: ${currentPrice}`);
 
-    const forecastDates = getNextFiveBusinessDays(logs);
+    const forecastDates = getNextFiveBusinessDays();
     const formattedDates = forecastDates.map(d => d.toISOString().split('T')[0]);
-
-    logs.push(`Requesting AI forecast for dates: ${formattedDates.join(', ')}`);
 
     const { output } = await forecastPrompt({
       ticker,
@@ -157,16 +141,11 @@ const generateStockForecastFlow = ai.defineFlow(
     });
     
     if (!output) {
-      logs.push("Error: AI did not return a valid forecast.");
       throw new Error("Failed to get forecast from AI.");
     }
-
-    logs.push("Successfully generated AI forecast.");
     
-    // Make sure the output from the AI has our logs attached.
     return {
         forecast: output.forecast,
-        logs: logs,
     };
   }
 );
