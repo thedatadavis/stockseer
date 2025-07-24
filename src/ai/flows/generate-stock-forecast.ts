@@ -10,22 +10,21 @@ import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 import { getLatestQuote, getHistoricalBars } from '@/services/alpaca';
 import { calculateHistoricalStatistics, type HistoricalContext } from '@/lib/statistics';
-import Handlebars from 'handlebars';
 
-// Register Handlebars helpers
-Handlebars.registerHelper('displayPercent', function (value) {
-    if (typeof value !== 'number') return 'N/A';
-    return `${(value * 100).toFixed(2)}%`;
-});
-
-Handlebars.registerHelper('toFixed', function (value, digits) {
-    if (typeof value !== 'number') return 'N/A';
-    return value.toFixed(digits);
-});
-
-Handlebars.registerHelper('gt', function (a, b) {
-    return a > b;
-});
+// Define Handlebars helpers
+const handlebarsHelpers = {
+    displayPercent: function (value: number) {
+        if (typeof value !== 'number') return 'N/A';
+        return `${(value * 100).toFixed(2)}%`;
+    },
+    toFixed: function (value: number, digits: number) {
+        if (typeof value !== 'number') return 'N/A';
+        return value.toFixed(digits);
+    },
+    gt: function (a: number, b: number) {
+        return a > b;
+    }
+};
 
 
 function getNextFiveBusinessDays(): Date[] {
@@ -136,7 +135,7 @@ For each day, provide a projected opening price, closing price, and the projecte
 Ensure the 'projectedGainLoss' is correctly calculated.
 Ensure the forecast array in the JSON output contains exactly 5 days. Do not include logs in the output.`,
     template: {
-      helpers: Handlebars.helpers,
+      helpers: handlebarsHelpers,
     }
   });
   
