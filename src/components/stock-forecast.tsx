@@ -152,16 +152,13 @@ function ForecastTable({ forecastData }: { forecastData: GenerateStockForecastOu
   }
 
   const formatDate = (dateString: string) => {
-    // Dates from the server are YYYY-MM-DD.
-    // new Date('YYYY-MM-DD') creates a date at midnight UTC.
-    // To prevent timezone conversion issues where the date could be off by one day,
-    // we explicitly tell it to use the UTC timezone.
-    const date = new Date(dateString);
+    // Appending 'T00:00:00Z' treats the date string as UTC.
+    const date = new Date(`${dateString}T00:00:00Z`);
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC',
+      timeZone: 'UTC', // Display in UTC to match the input
     });
   };
 
